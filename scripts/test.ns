@@ -1,0 +1,20 @@
+/** @type import(".").NS */
+let ns = null;
+
+import {setns, getServer} from './util.ns'
+
+export async function main(_ns) {
+    ns = _ns;
+    setns(ns)
+
+    let a = 5
+    let b = 8
+    let tester = false
+    let server
+
+    if (tester) 
+        server = getServer("n00dles")
+
+    if (server)
+        ns.tprintf("Server hostname: %s", server.hostname)
+}

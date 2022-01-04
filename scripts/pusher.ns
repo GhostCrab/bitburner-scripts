@@ -2,7 +2,7 @@
 let ns = null;
 
 export async function main(_ns) {
-	ns = _ns
-	
-	ns.tprintf("HELLO PUSHER #3")
+    ns = _ns;
+
+    ns.tprintf("HELLO PUSHER #3");
 }

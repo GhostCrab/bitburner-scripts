@@ -1,8 +1,11 @@
-/** @param {NS} ns **/
-export async function main(ns) {
-	const hostname = ns.args[0]
-	let tsleep = ns.args[1]
-	if (tsleep)
-		await ns.sleep(tsleep)
+/** @type import(".").NS */
+let ns = null;
+
+export async function main(_ns) {
+    ns = _ns;
+
+    const hostname = ns.args[0];
+    let tsleep = ns.args[1];
+    if (tsleep) await ns.sleep(tsleep);
     await ns.hack(hostname);
 }

@@ -1,155 +1,207 @@
-/** @param {NS} ns **/
-function mapHosts(ns, hosts, parents, current) {
-	let newParents = parents.concat(current)
-	hosts[current] = newParents
+/** @type import(".").NS */
+let ns = null;
 
-	let children = ns.scan(current).filter(element => !parents.includes(element))
-	for (const child of children) {
-		mapHosts(ns, hosts, newParents, child)
-	}
+function mapHosts(hosts, parents, current) {
+    let newParents = parents.concat(current);
+    hosts[current] = newParents;
+
+    let children = ns.scan(current).filter((element) => !parents.includes(element));
+    for (const child of children) {
+        mapHosts(hosts, newParents, child);
+    }
 }
 
-function printAugStats(ns, stats) {
-	if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult)
-	if (stats.agility_mult) ns.tprintf("    %31s: %.2f", "agility_mult", stats.agility_mult)
-	if (stats.bladeburner_analysis_mult) ns.tprintf("    %31s: %.2f", "bladeburner_analysis_mult", stats.bladeburner_analysis_mult)
-	if (stats.bladeburner_max_stamina_mult) ns.tprintf("    %31s: %.2f", "bladeburner_max_stamina_mult", stats.bladeburner_max_stamina_mult)
-	if (stats.bladeburner_stamina_gain_mult) ns.tprintf("    %31s: %.2f", "bladeburner_stamina_gain_mult", stats.bladeburner_stamina_gain_mult)
-	if (stats.bladeburner_success_chance_mult) ns.tprintf("    %31s: %.2f", "bladeburner_success_chance_mult", stats.bladeburner_success_chance_mult)
-	if (stats.charisma_exp_mult) ns.tprintf("    %31s: %.2f", "charisma_exp_mult", stats.charisma_exp_mult)
-	if (stats.charisma_mult) ns.tprintf("    %31s: %.2f", "charisma_mult", stats.charisma_mult)
-	if (stats.company_rep_mult) ns.tprintf("    %31s: %.2f", "company_rep_mult", stats.company_rep_mult)
-	if (stats.crime_money_mult) ns.tprintf("    %31s: %.2f", "crime_money_mult", stats.crime_money_mult)
-	if (stats.crime_success_mult) ns.tprintf("    %31s: %.2f", "crime_success_mult", stats.crime_success_mult)
-	if (stats.defense_exp_mult) ns.tprintf("    %31s: %.2f", "defense_exp_mult", stats.defense_exp_mult)
-	if (stats.defense_mult) ns.tprintf("    %31s: %.2f", "defense_mult", stats.defense_mult)
-	if (stats.dexterity_exp_mult) ns.tprintf("    %31s: %.2f", "dexterity_exp_mult", stats.dexterity_exp_mult)
-	if (stats.dexterity_mult) ns.tprintf("    %31s: %.2f", "dexterity_mult", stats.dexterity_mult)
-	if (stats.faction_rep_mult) ns.tprintf("    %31s: %.2f", "faction_rep_mult", stats.faction_rep_mult)
-	if (stats.hacking_chance_mult) ns.tprintf("    %31s: %.2f", "hacking_chance_mult", stats.hacking_chance_mult)
-	if (stats.hacking_exp_mult) ns.tprintf("    %31s: %.2f", "hacking_exp_mult", stats.hacking_exp_mult)
-	if (stats.hacking_grow_mult) ns.tprintf("    %31s: %.2f", "hacking_grow_mult", stats.hacking_grow_mult)
-	if (stats.hacking_money_mult) ns.tprintf("    %31s: %.2f", "hacking_money_mult", stats.hacking_money_mult)
-	if (stats.hacking_mult) ns.tprintf("    %31s: %.2f", "hacking_mult", stats.hacking_mult)
-	if (stats.hacking_speed_mult) ns.tprintf("    %31s: %.2f", "hacking_speed_mult", stats.hacking_speed_mult)
-	if (stats.hacknet_node_core_cost_mult) ns.tprintf("    %31s: %.2f", "hacknet_node_core_cost_mult", stats.hacknet_node_core_cost_mult)
-	if (stats.hacknet_node_level_cost_mult) ns.tprintf("    %31s: %.2f", "hacknet_node_level_cost_mult", stats.hacknet_node_level_cost_mult)
-	if (stats.hacknet_node_money_mult) ns.tprintf("    %31s: %.2f", "hacknet_node_money_mult", stats.hacknet_node_money_mult)
-	if (stats.hacknet_node_purchase_cost_mult) ns.tprintf("    %31s: %.2f", "hacknet_node_purchase_cost_mult", stats.hacknet_node_purchase_cost_mult)
-	if (stats.hacknet_node_ram_cost_mult) ns.tprintf("    %31s: %.2f", "hacknet_node_ram_cost_mult", stats.hacknet_node_ram_cost_mult)
-	if (stats.strength_exp_mult) ns.tprintf("    %31s: %.2f", "strength_exp_mult", stats.strength_exp_mult)
-	if (stats.strength_mult) ns.tprintf("    %31s: %.2f", "strength_mult", stats.strength_mult)
-	if (stats.work_money_mult) ns.tprintf("    %31s: %.2f", "work_money_mult", stats.work_money_mult)
+function printAugStats(stats) {
+    if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult);
+    if (stats.agility_mult) ns.tprintf("    %31s: %.2f", "agility_mult", stats.agility_mult);
+    if (stats.bladeburner_analysis_mult)
+        ns.tprintf("    %31s: %.2f", "bladeburner_analysis_mult", stats.bladeburner_analysis_mult);
+    if (stats.bladeburner_max_stamina_mult)
+        ns.tprintf("    %31s: %.2f", "bladeburner_max_stamina_mult", stats.bladeburner_max_stamina_mult);
+    if (stats.bladeburner_stamina_gain_mult)
+        ns.tprintf("    %31s: %.2f", "bladeburner_stamina_gain_mult", stats.bladeburner_stamina_gain_mult);
+    if (stats.bladeburner_success_chance_mult)
+        ns.tprintf("    %31s: %.2f", "bladeburner_success_chance_mult", stats.bladeburner_success_chance_mult);
+    if (stats.charisma_exp_mult) ns.tprintf("    %31s: %.2f", "charisma_exp_mult", stats.charisma_exp_mult);
+    if (stats.charisma_mult) ns.tprintf("    %31s: %.2f", "charisma_mult", stats.charisma_mult);
+    if (stats.company_rep_mult) ns.tprintf("    %31s: %.2f", "company_rep_mult", stats.company_rep_mult);
+    if (stats.crime_money_mult) ns.tprintf("    %31s: %.2f", "crime_money_mult", stats.crime_money_mult);
+    if (stats.crime_success_mult) ns.tprintf("    %31s: %.2f", "crime_success_mult", stats.crime_success_mult);
+    if (stats.defense_exp_mult) ns.tprintf("    %31s: %.2f", "defense_exp_mult", stats.defense_exp_mult);
+    if (stats.defense_mult) ns.tprintf("    %31s: %.2f", "defense_mult", stats.defense_mult);
+    if (stats.dexterity_exp_mult) ns.tprintf("    %31s: %.2f", "dexterity_exp_mult", stats.dexterity_exp_mult);
+    if (stats.dexterity_mult) ns.tprintf("    %31s: %.2f", "dexterity_mult", stats.dexterity_mult);
+    if (stats.faction_rep_mult) ns.tprintf("    %31s: %.2f", "faction_rep_mult", stats.faction_rep_mult);
+    if (stats.hacking_chance_mult) ns.tprintf("    %31s: %.2f", "hacking_chance_mult", stats.hacking_chance_mult);
+    if (stats.hacking_exp_mult) ns.tprintf("    %31s: %.2f", "hacking_exp_mult", stats.hacking_exp_mult);
+    if (stats.hacking_grow_mult) ns.tprintf("    %31s: %.2f", "hacking_grow_mult", stats.hacking_grow_mult);
+    if (stats.hacking_money_mult) ns.tprintf("    %31s: %.2f", "hacking_money_mult", stats.hacking_money_mult);
+    if (stats.hacking_mult) ns.tprintf("    %31s: %.2f", "hacking_mult", stats.hacking_mult);
+    if (stats.hacking_speed_mult) ns.tprintf("    %31s: %.2f", "hacking_speed_mult", stats.hacking_speed_mult);
+    if (stats.hacknet_node_core_cost_mult)
+        ns.tprintf("    %31s: %.2f", "hacknet_node_core_cost_mult", stats.hacknet_node_core_cost_mult);
+    if (stats.hacknet_node_level_cost_mult)
+        ns.tprintf("    %31s: %.2f", "hacknet_node_level_cost_mult", stats.hacknet_node_level_cost_mult);
+    if (stats.hacknet_node_money_mult)
+        ns.tprintf("    %31s: %.2f", "hacknet_node_money_mult", stats.hacknet_node_money_mult);
+    if (stats.hacknet_node_purchase_cost_mult)
+        ns.tprintf("    %31s: %.2f", "hacknet_node_purchase_cost_mult", stats.hacknet_node_purchase_cost_mult);
+    if (stats.hacknet_node_ram_cost_mult)
+        ns.tprintf("    %31s: %.2f", "hacknet_node_ram_cost_mult", stats.hacknet_node_ram_cost_mult);
+    if (stats.strength_exp_mult) ns.tprintf("    %31s: %.2f", "strength_exp_mult", stats.strength_exp_mult);
+    if (stats.strength_mult) ns.tprintf("    %31s: %.2f", "strength_mult", stats.strength_mult);
+    if (stats.work_money_mult) ns.tprintf("    %31s: %.2f", "work_money_mult", stats.work_money_mult);
 }
 
-function augHackUseful(ns, aug) {
-	let stats = aug.stats
-	if (stats.company_rep_mult) return true
-	if (stats.faction_rep_mult) return true
-	if (stats.hacking_chance_mult) return true
-	if (stats.hacking_exp_mult) return true
-	if (stats.hacking_grow_mult) return true
-	if (stats.hacking_money_mult) return true
-	if (stats.hacking_mult) return true
-	if (stats.hacking_speed_mult) return true
-	if (aug.name === "BitRunners Neurolink" || aug.name === "CashRoot Starter Kit" || aug.name === "PCMatrix") return true
+function augHackUseful(aug) {
+    let stats = aug.stats;
+    if (stats.company_rep_mult) return true;
+    if (stats.faction_rep_mult) return true;
+    if (stats.hacking_chance_mult) return true;
+    if (stats.hacking_exp_mult) return true;
+    if (stats.hacking_grow_mult) return true;
+    if (stats.hacking_money_mult) return true;
+    if (stats.hacking_mult) return true;
+    if (stats.hacking_speed_mult) return true;
+    if (aug.name === "BitRunners Neurolink" || aug.name === "CashRoot Starter Kit" || aug.name === "PCMatrix")
+        return true;
 
-	return false
+    return false;
 }
 
 class Augmentation {
-	constructor(ns, name) {
-		let ownedAugs = ns.getOwnedAugmentations(true)
-		let installedAugs = ns.getOwnedAugmentations()
-		this.ns = ns
-		this.name = name
-		this.price = ns.getAugmentationPrice(this.name)
-		this.rep = ns.getAugmentationRepReq(this.name)
-		this.prereq = ns.getAugmentationPrereq(this.name)
-		this.stats = ns.getAugmentationStats(this.name)
-		this.hackUseful = augHackUseful(ns, this)
-		this.owned = ownedAugs.includes(this.name)
-		this.installed = installedAugs.includes(this.name)
-		let installedStr = this.installed?"INSTALLED":(this.owned?"OWNED":"")
-		this.str = `${this.name} - ${ns.nFormat(this.price, '$0.000a')} [${ns.nFormat(this.rep, '0.000a')}] ${installedStr}`
-	}
+    constructor(name) {
+        let ownedAugs = ns.getOwnedAugmentations(true);
+        let installedAugs = ns.getOwnedAugmentations();
+        this.ns = ns;
+        this.name = name;
+        this.price = ns.getAugmentationPrice(this.name);
+        this.rep = ns.getAugmentationRepReq(this.name);
+        this.prereq = ns.getAugmentationPrereq(this.name);
+        this.stats = ns.getAugmentationStats(this.name);
+        this.hackUseful = augHackUseful(this);
+        this.owned = ownedAugs.includes(this.name);
+        this.installed = installedAugs.includes(this.name);
+        let installedStr = this.installed ? "INSTALLED" : this.owned ? "OWNED" : "";
+        this.str = `${this.name} - ${ns.nFormat(this.price, "$0.000a")} [${ns.nFormat(
+            this.rep,
+            "0.000a"
+        )}] ${installedStr}`;
+    }
 
-	toString() {
-		return this.str
-	}
+    toString() {
+        return this.str;
+    }
 }
 
-function doProgramBuys(ns) {
-	let player = ns.getPlayer()
-	
-	if (!player.tor && player.money > 200e3)
-		ns.purchaseTor()
+function doProgramBuys() {
+    let player = ns.getPlayer();
 
-	if (!ns.fileExists("BruteSSH.exe", "home") && player.money > 500e3)
-		ns.purchaseProgram("BruteSSH.exe")
+    if (!player.tor && player.money > 200e3) ns.purchaseTor();
 
-	if (!ns.fileExists("FTPCrack.exe", "home") && player.money > 1500e3)
-		ns.purchaseProgram("FTPCrack.exe")
+    if (!ns.fileExists("BruteSSH.exe", "home") && player.money > 500e3) ns.purchaseProgram("BruteSSH.exe");
 
-	if (!ns.fileExists("relaySMTP.exe", "home") && player.money > 5e6)
-		ns.purchaseProgram("relaySMTP.exe")
+    if (!ns.fileExists("FTPCrack.exe", "home") && player.money > 1500e3) ns.purchaseProgram("FTPCrack.exe");
 
-	if (!ns.fileExists("HTTPWorm.exe", "home") && player.money > 30e6)
-		ns.purchaseProgram("HTTPWorm.exe")
+    if (!ns.fileExists("relaySMTP.exe", "home") && player.money > 5e6) ns.purchaseProgram("relaySMTP.exe");
 
-	if (!ns.fileExists("SQLInject.exe", "home") && player.money > 250e6)
-		ns.purchaseProgram("SQLInject.exe")
+    if (!ns.fileExists("HTTPWorm.exe", "home") && player.money > 30e6) ns.purchaseProgram("HTTPWorm.exe");
+
+    if (!ns.fileExists("SQLInject.exe", "home") && player.money > 250e6) ns.purchaseProgram("SQLInject.exe");
 }
 
-async function doBackdoors(ns) {
-	// "b-and-a"
-	const targetHosts = ["CSEC","avmnite-02h","I.I.I.I","run4theh111z",".","w0r1d_d43m0n"]
-	let hosts = {}
-	mapHosts(ns, hosts, [], "home")
+async function doBackdoors() {
+    // "b-and-a"
+    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
+    let hosts = {};
+    mapHosts(hosts, [], "home");
 
-	for (const [hostName, trail] of Object.entries(hosts)) {
-		let server = ns.getServer(hostName)
-		if (!targetHosts.includes(hostName) || server.backdoorInstalled || server.requiredHackingSkill > ns.getHackingLevel() || !server.hasAdminRights)
-			continue
+    for (const [hostName, trail] of Object.entries(hosts)) {
+        let server = ns.getServer(hostName);
+        if (
+            !targetHosts.includes(hostName) ||
+            server.backdoorInstalled ||
+            server.requiredHackingSkill > ns.getHackingLevel() ||
+            !server.hasAdminRights
+        )
+            continue;
 
-		for (const hostHopName of trail) {
-			ns.connect(hostHopName)
-		}
+        for (const hostHopName of trail) {
+            ns.connect(hostHopName);
+        }
 
-		await ns.installBackdoor()
-		ns.connect("home")
-	}
+        await ns.installBackdoor();
+        ns.connect("home");
+    }
 }
 
-export async function main(ns) {
-	doProgramBuys(ns)
-	await doBackdoors(ns)
+export async function main(_ns) {
+    ns = _ns;
 
-	let player = ns.getPlayer()
-	let incomePerSec = player.money / (player.playtimeSinceLastAug / 1000)
+    doProgramBuys();
+    await doBackdoors();
 
-	ns.tprintf(`Income: ${ns.nFormat(incomePerSec, '$0.000a')}/s`)
+    let player = ns.getPlayer();
+    let incomePerSec = player.money / (player.playtimeSinceLastAug / 1000);
 
-	let allFactions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated", "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12", "Volhaven", "Speakers for the Dead", "The Dark Army", "The Syndicate", "Silhouette", "Tetrads", "Slum Snakes", "Netburners", "Tian Di Hui", "CyberSec", "Bladeburners", "Church of the Machine God"]
+    ns.tprintf(`Income: ${ns.nFormat(incomePerSec, "$0.000a")}/s`);
 
-	//for (let faction of player.factions) {
-	for (let faction of allFactions) {
-		let augs = ns.getAugmentationsFromFaction(faction).map(name => {
-			return new Augmentation(ns, name)
-		}).sort((a, b) => a.rep - b.rep)
-		let augsToBuy = []
-		for (let aug of augs) {
-			if (!aug.hackUseful || aug.owned)
-				continue
-			augsToBuy.push(aug)
-		}
+    let allFactions = [
+        "Illuminati",
+        "Daedalus",
+        "The Covenant",
+        "ECorp",
+        "MegaCorp",
+        "Bachman & Associates",
+        "Blade Industries",
+        "NWO",
+        "Clarke Incorporated",
+        "OmniTek Incorporated",
+        "Four Sigma",
+        "KuaiGong International",
+        "Fulcrum Secret Technologies",
+        "BitRunners",
+        "The Black Hand",
+        "NiteSec",
+        "Aevum",
+        "Chongqing",
+        "Ishima",
+        "New Tokyo",
+        "Sector-12",
+        "Volhaven",
+        "Speakers for the Dead",
+        "The Dark Army",
+        "The Syndicate",
+        "Silhouette",
+        "Tetrads",
+        "Slum Snakes",
+        "Netburners",
+        "Tian Di Hui",
+        "CyberSec",
+        "Bladeburners",
+        "Church of the Machine God",
+    ];
 
-		if (augsToBuy.length) {
-			ns.tprintf("%s:", faction)
-			for (let aug of augsToBuy) {
-				ns.tprintf("  %s", aug)
-				printAugStats(ns, aug.stats)
-			}
-		}
-	}
+    //for (let faction of player.factions) {
+    for (let faction of allFactions) {
+        let augs = ns
+            .getAugmentationsFromFaction(faction)
+            .map((name) => {
+                return new Augmentation(name);
+            })
+            .sort((a, b) => a.rep - b.rep);
+        let augsToBuy = [];
+        for (let aug of augs) {
+            if (!aug.hackUseful || aug.owned) continue;
+            augsToBuy.push(aug);
+        }
+
+        if (augsToBuy.length) {
+            ns.tprintf("%s:", faction);
+            for (let aug of augsToBuy) {
+                ns.tprintf("  %s", aug);
+                printAugStats(aug.stats);
+            }
+        }
+    }
 }

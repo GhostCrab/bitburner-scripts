@@ -1,5 +1,7 @@
-/** @param {NS} ns **/
-function softenServer(ns, hostName) {
+/** @type import(".").NS */
+let ns = null;
+
+function softenServer(hostName) {
 	let server = ns.getServer(hostName)
 
 	if (server.hasAdminRights) {
@@ -32,17 +34,17 @@ function softenServer(ns, hostName) {
 	}
 }
 
-function serverIsHackable(ns, hostName) {
+function serverIsHackable(hostName) {
 	const server = ns.getServer(hostName)
 	return server.hasAdminRights && (ns.getHackingLevel() >= server.requiredHackingSkill) && server.moneyMax > 1 && server.hostname !== 'NO SERVER'
 }
 
-function canExecuteOnServer(ns, hostName) {
+function canExecuteOnServer(hostName) {
 	const server = ns.getServer(hostName)
 	return server.hasAdminRights && server.maxRam > 0 && !server.purchasedByPlayer
 }
 
-function serverValueSort(ns, h1, h2) {
+function serverValueSort(h1, h2) {
 	const s1 = ns.getServer(h1)
 	const s2 = ns.getServer(h2)
 
@@ -52,12 +54,13 @@ function serverValueSort(ns, h1, h2) {
 }
 
 
-export async function main(ns) {
+export async function main(_ns) {
+    ns = _ns;
+
 	const hostSet = new Set(["home"])
 	let hostQueue = ["home"]
 	let currentHost
 	while (currentHost = hostQueue.shift()) {
-		//ns.tprint("Crawling " + currentHost)
 		let newHosts = ns.scan(currentHost)
 
 		for (const newHost of newHosts) {
@@ -70,11 +73,11 @@ export async function main(ns) {
 
 	let hostNames = Array.from(hostSet)
 	for (const hostName of hostNames) {
-		softenServer(ns, hostName)
+		softenServer(hostName)
 	}
 
-	let hackableHosts = hostNames.filter(serverIsHackable.bind(null, ns)).sort(serverValueSort.bind(null, ns))
-	let rootHosts = hostNames.filter(canExecuteOnServer.bind(null, ns))
+	let hackableHosts = hostNames.filter(serverIsHackable).sort(serverValueSort)
+	let rootHosts = hostNames.filter(canExecuteOnServer)
 	let hackMeRam = ns.getScriptRam("hack_me.ns", "home")
 
 	let roundRobin = 0

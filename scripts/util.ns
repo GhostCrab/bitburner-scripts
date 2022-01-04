@@ -1,4 +1,55 @@
-/** @param {NS} ns **/
-export default class Utils {
-	
+/** @type import(".").NS */
+let ns = null;
+
+export function setns(_ns) {
+    ns = _ns;
+}
+
+export function myprint() {
+    let params = Array.prototype.slice.call(arguments, 1);
+    ns.tprintf(arguments[0], ...params);
+}
+
+export function softenServer(hostname) {
+    if (ns.hasRootAccess(hostname)) {
+        return;
+    }
+
+    let ports = 0;
+    if (ns.fileExists("BruteSSH.exe", "home")) {
+        ns.brutessh(hostname);
+        ports++;
+    }
+
+    if (ns.fileExists("FTPCrack.exe", "home")) {
+        ns.ftpcrack(hostname);
+        ports++;
+    }
+
+    if (ns.fileExists("HTTPWorm.exe", "home")) {
+        ns.httpworm(hostname);
+        ports++;
+    }
+
+    if (ns.fileExists("relaySMTP.exe", "home")) {
+        ns.relaysmtp(hostname);
+        ports++;
+    }
+
+    if (ns.fileExists("SQLInject.exe", "home")) {
+        ns.sqlinject(hostname);
+        ports++;
+    }
+
+    if (ports >= ns.getServerNumPortsRequired(hostname)) {
+        ns.nuke(hostname);
+    }
+}
+
+export function serverIsHackable(hostname) {
+    return ns.hasRootAccess(hostname) && ns.getHackingLevel() >= getServerRequiredHackingLevel(hostname);
+}
+
+export function canExecuteOnServer(hostname) {
+    return ns.hasRootAccess(hostname);
 }

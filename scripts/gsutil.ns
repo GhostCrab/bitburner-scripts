@@ -1,7 +1,16 @@
 /** @type import(".").NS */
 let ns = null;
 
-function softenServer(hostName) {
+export function setns(_ns) {
+    ns = _ns
+}
+
+export function myprint() {
+    let params = Array.prototype.slice.call(arguments, 1);
+    ns.tprintf(arguments[0], ...params);
+}
+
+export function softenServer(hostName) {
     let server = ns.getServer(hostName);
 
     if (server.hasAdminRights) {
@@ -34,45 +43,12 @@ function softenServer(hostName) {
     }
 }
 
-function serverIsHackable(hostName) {
+export function serverIsHackable(hostName) {
     const server = ns.getServer(hostName);
     return server.hasAdminRights && ns.getHackingLevel() >= server.requiredHackingSkill;
 }
 
-function canExecuteOnServer(hostName) {
+export function canExecuteOnServer(hostName) {
     const server = ns.getServer(hostName);
     return server.hasAdminRights;
-}
-
-function serverValueSort(h1, h2) {
-    const s1 = ns.getServer(h1);
-    const s2 = ns.getServer(h2);
-
-    if (s1.moneyMax > s2.moneyMax) return -1;
-    if (s1.moneyMax < s2.moneyMax) return 1;
-    return 0;
-}
-
-export async function main(_ns) {
-    ns = _ns;
-
-    const hostSet = new Set(["home"]);
-    let hostQueue = ["home"];
-    let currentHost;
-    while ((currentHost = hostQueue.shift())) {
-        //ns.tprint("Crawling " + currentHost)
-        let newHosts = ns.scan(currentHost);
-
-        for (const newHost of newHosts) {
-            if (!hostSet.has(newHost)) {
-                hostQueue.push(newHost);
-                hostSet.add(newHost);
-            }
-        }
-    }
-
-    let hostNames = Array.from(hostSet);
-    for (const hostName of hostNames) {
-        softenServer(hostName);
-    }
 }
