@@ -1,0 +1,91 @@
+/** @param {NS} ns **/
+function serverIsHackable(ns, hostName) {
+	const server = ns.getServer(hostName)
+	return server.hasAdminRights && (ns.getHackingLevel() >= server.requiredHackingSkill)
+}
+
+function canExecuteOnServer(ns, hostName) {
+	const server = ns.getServer(hostName)
+	return server.hasAdminRights
+}
+
+function serverValueSort(ns, h1, h2) {
+	const s1 = ns.getServer(h1)
+	const s2 = ns.getServer(h2)
+
+	if (s1.moneyMax > s2.moneyMax) return -1
+	if (s1.moneyMax < s2.moneyMax) return 1
+	return 0
+}
+
+function matchWeakenTarget(a, target) {
+	let epsilon = 0.1
+	let targetMin = target - epsilon
+	let targetMax = target + epsilon
+
+	return (a > targetMin && a < targetMax)
+}
+
+// function getWeakenThreads(ns, min, max, target) {
+// 	let maxMag = ns.weakenAnalyze(max)
+// 	if (min === max)
+// 		return min
+
+// 	if (matchWeakenTarget(max))
+// 		return max
+
+// 	if (maxMag < target)
+// 		return getWeakenThreads(ns, max, max*2, target)
+
+// 	let minMag = 
+// }
+
+function assessHack(ns, hostNames) {
+	let hackableHosts = hostNames.filter(serverIsHackable.bind(null, ns)).sort(serverValueSort.bind(null, ns))
+	let hackRam = ns.getScriptRam("hack.ns")
+	let growRam = ns.getScriptRam("grow.ns")
+	let weakenRam = ns.getScriptRam("weaken.ns")
+
+	let fundThres = .90
+	let targetServer = ns.getServer(hackableHosts[0])
+	let targetFunds = targetServer.moneyMax * fundThres
+	let availableFunds = (targetServer.moneyAvailable <= 1 ? 1 : targetServer.moneyAvailable)
+	let growthRequired = targetFunds / availableFunds
+	let growThreadsNeeded = 0
+	if (growthRequired > 1)
+		growThreadsNeeded = Math.ceil(ns.growthAnalyze(targetServer.hostname, growthRequired))
+
+	let targetGrowTime = ns.getGrowTime(targetServer.hostname)
+	let targetWeakenTime = ns.getWeakenTime(targetServer.hostname)
+
+	ns.tprintf("%s:", targetServer.hostname)
+	ns.tprintf("  %25s: %s/%s [%2.0f%% | %s]", "Target Funds", ns.nFormat(targetServer.moneyAvailable, '($0.000a)'), ns.nFormat(targetFunds, '($0.000a)'), fundThres * 100, ns.nFormat(targetServer.moneyMax, '($0.000a)'))
+	ns.tprintf("  %25s: %.2fx, %d Threads", "Growth Required", growthRequired, growThreadsNeeded)
+	ns.tprintf("  %25s: %s @ %s", "Server Growth", targetServer.serverGrowth, ns.tFormat(targetGrowTime))
+	ns.tprintf("  %25s: %s", "Weaken Time", targetServer.serverGrowth, ns.tFormat(targetGrowTime))
+	ns.tprintf("  %25s: %s / %s / %s", "Hack Difficulty [M/B/H]", targetServer.minDifficulty, targetServer.baseDifficulty, targetServer.hackDifficulty)
+	ns.tprintf("  %25s: %d/%d", "Ram Available", targetServer.maxRam-targetServer.ramUsed, targetServer.maxRam)
+}
+
+export async function main(ns) {
+	const hostSet = new Set(["home"])
+	let hostQueue = ["home"]
+	let currentHost
+	while (currentHost = hostQueue.shift()) {
+		let newHosts = ns.scan(currentHost)
+
+		for (const newHost of newHosts) {
+			if (!hostSet.has(newHost)) {
+				hostQueue.push(newHost)
+				hostSet.add(newHost)
+			}
+		}
+	}
+
+	let hostNames = Array.from(hostSet)
+	//assessHack(ns, hostNames)
+
+	let serverName = ns.args[0]
+	let targetServer = ns.getServer(serverName)
+	assessHack(ns, [targetServer.hostname])
+}

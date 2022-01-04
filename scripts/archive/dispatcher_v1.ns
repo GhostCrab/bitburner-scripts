@@ -1,0 +1,158 @@
+/** @param {NS} ns **/
+/** dispatcher.ns - WGH job dispatcher **/
+function fltEq(a, b) {
+    let epsilon = .05
+    return (a > b - epsilon && a < b + epsilon)
+}
+
+export async function main(ns) {
+    let maxRam = ns.args[0]
+    let server = ns.getServer("home")
+    let hostname = "phantasy"
+
+    let maxMoney = ns.getServerMaxMoney(hostname)
+    let lowThresholdFactor = 0.5
+    let highThresholdFactor = 1
+    let lowMoney = maxMoney * lowThresholdFactor
+    let highMoney = maxMoney * highThresholdFactor
+    let currentMoney = Math.max(1.0, ns.getServerMoneyAvailable(hostname))  
+
+    let tgrow = ns.getGrowTime(hostname)
+    let tweaken = ns.getWeakenTime(hostname)
+    let thack = ns.getHackTime(hostname)
+
+    let fullHackThreads = Math.ceil(ns.hackAnalyzeThreads(hostname, currentMoney - lowMoney))
+    let hackSecIncrease = ns.hackAnalyzeThreads(hostname, fullHackThreads)
+
+    let weakenAmountPerThread = ns.weakenAnalyze(1, server.cpuCores)
+    ns.tprintf("INFO: Weaken Amount Per Thread: %.2f", weakenAmountPerThread)
+    let secLevel = ns.getServerSecurityLevel(hostname)
+    let minSecLevel = ns.getServerMinSecurityLevel(hostname)
+
+    let fullGrowThreads = 0
+    if (highMoney > currentMoney)
+        fullGrowThreads = ns.growthAnalyze(hostname, highMoney / currentMoney, server.cpuCores)
+    let growSecIncrease = ns.growthAnalyzeSecurity(fullGrowThreads)
+
+    let growRam = ns.getScriptRam("grow.ns")        // 1.75GB
+    let weakenRam = ns.getScriptRam("weaken.ns")    // 1.75GB
+    let hackRam = ns.getScriptRam("hack.ns")        // 1.70GB
+
+    let hostRam = (server.maxRam - server.ramUsed)
+    if (server.hostname === "home")
+        hostRam -= 32
+
+    if (maxRam) {
+        ns.tprintf("Overriding availble host RAM max to %.2f", maxRam)
+        hostRam = Math.min(maxRam, hostRam)
+    }
+    
+    ns.tprintf("Availble host RAM %.2f", hostRam)
+
+    // Allow headroom of 8GB to even do anything    
+    if (hostRam <= 8) {
+        ns.tprintf("ERROR: ${server.hostname} has no available RAM")
+        return
+    }
+
+    // Start by weakening to minimum
+    while (secLevel > minSecLevel) {
+        // Threads we are running is the minimum between the number of threads needed, or the number of threads we can run on this server 
+        let weakenThreads = Math.min(Math.ceil((secLevel - minSecLevel) / weakenAmountPerThread), Math.floor(hostRam / weakenRam))
+        let estSecLevelAfterWeaken = Math.max(minSecLevel, secLevel - (weakenThreads*weakenAmountPerThread))
+        ns.tprintf("Initial Weaken Process:")
+        ns.tprintf("  Lowering Security on %s from %.2f to %.2f with %d threads running on %s [%s]",
+            hostname, secLevel, estSecLevelAfterWeaken, weakenThreads, server.hostname, ns.tFormat(tweaken))
+        ns.exec("weaken.ns", server.hostname, weakenThreads, hostname)
+        await ns.sleep(tweaken + 100)
+        let oldSecLevel = secLevel
+        secLevel = ns.getServerSecurityLevel(hostname)
+        ns.tprintf("  Lowered Security from %.2f to %.2f", oldSecLevel, secLevel)
+        if (!fltEq(estSecLevelAfterWeaken, secLevel))
+            ns.tprintf("  ERROR: Estimated weaken amount was not correct [est:%.2f !== new:%.2f]", estSecLevelAfterWeaken, secLevel)
+    }
+
+    // hack() execution time: 3.185 seconds
+    // grow() execution time: 10.192 seconds
+    // weaken() execution time: 12.740 seconds
+
+    while (true) {
+        while (currentMoney < highMoney) {
+            tgrow = ns.getGrowTime(hostname)
+            tweaken = ns.getWeakenTime(hostname)
+
+            currentMoney = Math.max(1.0, ns.getServerMoneyAvailable(hostname))
+            secLevel = ns.getServerSecurityLevel(hostname)
+
+            fullGrowThreads = Math.ceil(ns.growthAnalyze(hostname, highMoney / currentMoney, server.cpuCores))
+            let growThreads = fullGrowThreads + 1, weakenThreads, growRamCycle
+            do {
+                growThreads -= 1
+                growSecIncrease = ns.growthAnalyzeSecurity(growThreads)
+                weakenThreads = Math.ceil(growSecIncrease / weakenAmountPerThread)
+                growRamCycle = (growThreads * growRam) + (weakenThreads * weakenRam)
+            } while (growRamCycle > maxRam)
+
+            ns.tprintf("Grow Process:")
+            ns.tprintf("  Calling Grow with %d threads (%.2fGB) and Weaken with %d threads (%.2fGB); Total %.2fGB for %s",
+                growThreads, growThreads * growRam, weakenThreads, weakenThreads * weakenRam, growRamCycle, ns.tFormat(tweaken))
+            ns.tprintf("  Grow will increase security from %.2f to %.2f (%.5f per hack thread), weaken should decrease security level by %.2f",
+            secLevel, secLevel + growSecIncrease, ns.growthAnalyzeSecurity(1), weakenThreads * weakenAmountPerThread)
+            if (growRamCycle > hostRam) {
+                ns.tprintf("  ERROR: Available RAM (%.2fGB) is less than required amount for the grow process (%.2fGB)", hostRam, growRamCycle)
+                return
+            }
+
+            let weakenGrowTimeDiff = tweaken - tgrow - 100
+            ns.exec("weaken.ns", server.hostname, weakenThreads, hostname)
+            await ns.sleep(weakenGrowTimeDiff)
+            ns.exec("grow.ns", server.hostname, fullGrowThreads, hostname)
+            await ns.sleep(tgrow + 1000)
+
+            let oldMoney = currentMoney
+            currentMoney = Math.max(1.0, ns.getServerMoneyAvailable(hostname))
+            secLevel = ns.getServerSecurityLevel(hostname)
+
+            ns.tprintf("  Increased %s available money from %.2f to %.2f (%.2f%% of Max); Current Security: %.2f (min: %.2f)",
+                hostname, oldMoney, currentMoney, (currentMoney / maxMoney) * 100, secLevel, minSecLevel)
+        }
+
+        // Hack and weaken at the same time
+        thack = ns.getHackTime(hostname)
+        tweaken = ns.getWeakenTime(hostname)
+
+        secLevel = ns.getServerSecurityLevel(hostname)
+        fullHackThreads = Math.ceil(ns.hackAnalyzeThreads(hostname, currentMoney - lowMoney))
+        let hackThreads = fullHackThreads + 1, weakenThreads, hackRamCycle
+
+        do {
+            hackThreads -= 1
+            hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads)
+            weakenThreads = Math.ceil(hackSecIncrease / weakenAmountPerThread)
+            hackRamCycle = (hackThreads * hackRam) + (weakenThreads * weakenRam)
+        } while (hackRamCycle > maxRam)
+
+        ns.tprintf("Hack Process: ")
+        ns.tprintf("  Calling Hack with %d threads (%.2fGB) and Weaken with %d threads (%.2fGB); Total %.2fGB for %s",
+            hackThreads, hackThreads * hackRam, weakenThreads, weakenThreads * weakenRam, hackRamCycle, ns.tFormat(tweaken))
+        ns.tprintf("  Hack will increase security from %.2f to %.2f (%.5f per hack thread), weaken should decrease security level by %.2f",
+            secLevel, secLevel + hackSecIncrease, ns.hackAnalyzeSecurity(1), weakenThreads * weakenAmountPerThread)
+        if (hackRamCycle > hostRam) {
+            ns.tprintf("  ERROR: Available RAM (%.2fGB) is less than required amount for the hack process (%.2fGB)", hostRam, hackRamCycle)
+            return
+        }
+
+        let weakenHackTimeDiff = tweaken - thack - 100
+        ns.exec("weaken.ns", server.hostname, weakenThreads, hostname)
+        await ns.sleep(weakenHackTimeDiff)
+        ns.exec("hack.ns", server.hostname, fullHackThreads, hostname)
+        await ns.sleep(thack + 1000)
+
+        let oldMoney = currentMoney
+        currentMoney = Math.max(1.0, ns.getServerMoneyAvailable(hostname))
+        secLevel = ns.getServerSecurityLevel(hostname)
+
+        ns.tprintf("  Decreased %s available money from %.2f to %.2f (%.2f%% decrease); Current Security: %.2f (min: %.2f)",
+            hostname, oldMoney, currentMoney, (currentMoney / oldMoney) * 100, secLevel, minSecLevel)
+    }
+}
