@@ -120,4 +120,25 @@ export async function main(_ns) {
             ns.tFormat(tweaken * 1000)
         );
     }
+
+    /*
+    Algorithm:
+      collect target arrays for each server size for all purchased servers and home
+      collate targets per income for all servers of size purchasedServers.length + 1 (+1 for home) ???
+      go down list from top to bottom, inspect servers at the same tier to see if the current target is being run at that tier
+        if the target is being run at that tier, continue to the next target
+        else kill the lowest producing target and start the current target on the newly freed server
+      when starting a new target, specify the income of the target in the arg list so it can be compared later
+
+    Colate:
+      Iterate over all tier arrays at the same time
+      Compare current item on all arrays, pick item with the highest income
+      if item.server is not in the master list, pop the item, add the item to the master list and increment a tracking variable for that tier
+        if the tier is full (tracker === tier.length) then clear out that tier's list or stop tracking it
+      if item.server is in the master list already, pop the item without adding it to the list
+      if all tiers are full, you're done
+
+    Launching new dispatcher:
+      scp dispatcher.ns to the host server, exec dispatcher.ns with the target, 1 thread and the raw income/s (for later comparison)
+    */
 }
