@@ -1,5 +1,19 @@
 var debug = false;
 
+/*
+
+RUNTIME ERROR
+dispatcher.ns@pserv-4
+Args: ["alpha-ent"]
+
+growthAnalyze: Invalid argument: growth must be numeric and >= 1, is 0.9998154800600708.
+
+Stack:
+dispatcher.ns:L316@calcHGWThreadsSmart
+dispatcher.ns:L469@Module.main
+
+*/
+
 function fltEq(a, b) {
     let epsilon = 0.05;
     return a > b - epsilon && a < b + epsilon;
