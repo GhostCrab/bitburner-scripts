@@ -1,9 +1,7 @@
-/** @type import(".").NS */
-let ns = null;
+import { allHosts, serverIsHackable, setns, softenServer, doProgramBuys, canExecuteOnServer } from "./util.ns";
 
-import { allHosts, serverIsHackable, setns } from "./util.ns";
-
-function calcHackAmount(host, _target, ramAllowance) {
+/** @param {import(".").NS } ns */
+function calcHackAmount(ns, host, _target, ramAllowance) {
     let player = ns.getPlayer();
     let target = ns.getServer(_target.hostname);
     target.hackDifficulty = target.minDifficulty;
@@ -18,7 +16,7 @@ function calcHackAmount(host, _target, ramAllowance) {
     let hackThreads = Math.ceil(targetHackPercent / hackPercent);
     let hackAmount = hackThreads * hackPercent * target.moneyMax;
 
-    let growThreads = calcMinGrowThreads(host, target, hackAmount);
+    let growThreads = calcMinGrowThreads(ns, host, target, hackAmount);
 
     let weakenAmountPerThread = ns.weakenAnalyze(1, host.cpuCores);
 
@@ -38,9 +36,11 @@ function calcHackAmount(host, _target, ramAllowance) {
 
     while (hackRamCycle > ramAllowance) {
         hackThreads--;
+        if (hackThreads === 0) return 0;
+
         hackAmount = hackThreads * hackPercent * target.moneyMax;
 
-        growThreads = calcMinGrowThreads(host, target, hackAmount);
+        growThreads = calcMinGrowThreads(ns, host, target, hackAmount);
 
         hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
         growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
@@ -59,7 +59,8 @@ function calcHackAmount(host, _target, ramAllowance) {
     return hackAmount * ns.formulas.hacking.hackChance(target, player);
 }
 
-function calcMinGrowThreads(host, _target, hackAmount) {
+/** @param {import(".").NS } ns */
+function calcMinGrowThreads(ns, host, _target, hackAmount) {
     let player = ns.getPlayer();
     let target = ns.getServer(_target.hostname);
     target.hackDifficulty = target.minDifficulty;
@@ -74,71 +75,155 @@ function calcMinGrowThreads(host, _target, hackAmount) {
     return growThreads + 1;
 }
 
-function calcHackRate(host, _target, ramAllowance) {
+/** @param {import(".").NS } ns */
+function calcHackRate(ns, host, _target, ramAllowance) {
     let target = _target;
     let player = ns.getPlayer();
     if (typeof target === "string" || target instanceof String) target = ns.getServer(target);
 
+    if (target.moneyMax <= 0) return 0;
+
     target.hackDifficulty = target.minDifficulty;
 
     let tweaken = ns.formulas.hacking.weakenTime(target, player) / 1000;
-    let hackAmount = calcHackAmount(host, target, ramAllowance);
+    let hackAmount = calcHackAmount(ns, host, target, ramAllowance);
 
     return hackAmount / tweaken;
 }
 
-/** @param {NS} _ns **/
-export async function main(_ns) {
-    ns = _ns;
+/** @param {import(".").NS } ns */
+function getRamAllowance(ns, _host) {
+    let host = _host;
+    if (typeof host === "string" || host instanceof String) host = ns.getServer(host);
 
-    setns(ns);
+    let ramAllowance = host.maxRam;
+    if (host.hostname === "home") ramAllowance -= 64;
 
-    let player = ns.getPlayer();
+    return ramAllowance;
+}
 
-    let host = ns.getServer("home");
-    let ramAllowance = host.maxRam - 32;
+/** @param {import(".").NS } ns */
+function getOrderedTargetArr(ns, _host) {
+    let host = _host;
+    if (typeof host === "string" || host instanceof String) host = ns.getServer(host);
 
-    let hostnames = allHosts()
+    let ramAllowance = getRamAllowance(ns, host);
+    let hackRates = [];
+    let targetnames = allHosts()
         .filter(serverIsHackable)
-        .filter((hostname) => ns.getServerMaxMoney(hostname) > 0)
-        .sort((a, b) => calcHackRate(host, b, ramAllowance) - calcHackRate(host, a, ramAllowance));
+        .filter((hostname) => ns.getServerMaxMoney(hostname) > 0);
+    for (let targetname of targetnames) {
+        hackRates.push([targetname, calcHackRate(ns, host, targetname, ramAllowance)]);
+    }
 
-    for (let hostname of hostnames) {
-        let target = ns.getServer(hostname);
+    return hackRates.sort((a, b) => b[1] - a[1]);
+}
+
+/** @param {import(".").NS } ns */
+function testOutput(ns) {
+    let host = ns.getServer("home");
+    let targetnames = getOrderedTargetArr(ns, host);
+
+    for (let [targetname, hackrate] of targetnames) {
+        let target = ns.getServer(targetname);
         target.moneyAvailable = target.moneyMax;
         target.hackDifficulty = target.minDifficulty;
 
         let tweaken = ns.formulas.hacking.weakenTime(target, player) / 1000;
-        let hackAmount = calcHackAmount(host, target, ramAllowance);
+        let ramAllowance = getRamAllowance(ns, host);
+        let hackAmount = calcHackAmount(ns, host, target, ramAllowance);
 
         ns.tprintf(
-            "%20s %s/s %s [%.2f%% of Max] every %s",
+            "%20s %10s/s %10s [%-2.2f%% of Max] every %s (hackrate: %s)",
             target.hostname,
             ns.nFormat(hackAmount / tweaken, "($0.000a)"),
             ns.nFormat(hackAmount, "($0.000a)"),
             (hackAmount / target.moneyMax) * 100,
-            ns.tFormat(tweaken * 1000)
+            ns.tFormat(tweaken * 1000),
+            ns.nFormat(hackrate, "($0.000a)")
         );
+    }
+}
+
+/** @param {import(".").NS } ns */
+export async function main(ns) {
+    setns(ns);
+
+    let player = ns.getPlayer();
+    let allHostnames = allHosts();
+
+    doProgramBuys();
+
+    // soften all servers
+    for (const hostName of allHosts()) {
+        softenServer(hostName);
+    }
+
+    // create a dictionary mapping server size to server name array (with a special bucket for "home")
+    let hostSizeDict = {};
+    for (let hostname of allHosts().filter(canExecuteOnServer)) {
+        let key = ns.getServerMaxRam(hostname);
+
+        if (hostname === "home") key = "home";
+
+        if (!(key in hostSizeDict)) hostSizeDict[key] = [];
+
+        hostSizeDict[key].push(hostname);
+    }
+
+    // create a dictionary mapping host server sizes to ordered target arrays
+    let targetArrDict = {};
+    let badhosts = [];
+    for (const [key, value] of Object.entries(hostSizeDict)) {
+        let orderedTargetArr = getOrderedTargetArr(ns, value[0]);
+        if (orderedTargetArr[0][1] === 0) {
+            //ns.tprintf("Host %s does not have enough ram (%d) to execute a hack script", value[0], ns.getServerMaxRam(value[0]))
+            badhosts.push(value[0]);
+        } else {
+            targetArrDict[key] = orderedTargetArr;
+        }
+    }
+
+    // purge hosts that can't sustain hack scripts
+    for (let hostname of badhosts) {
+        delete hostSizeDict[hostname];
+    }
+
+    // collect target arrays into a single array ordered by value and including the server size bucket information
+    let allTargets = [];
+    for (const [key, values] of Object.entries(targetArrDict)) {
+        for (let value of values) {
+            allTargets.push({
+                size: key,
+                targetname: value[0],
+                income: value[1],
+            });
+        }
+    }
+    allTargets = allTargets.sort((a, b) => b.income - a.income);
+
+    for (let target of allTargets) {
+        ns.tprintf("%20s: %10s/s %s", target.targetname, ns.nFormat(target.income, "($0.000a)"), target.size.toString());
     }
 
     /*
     Algorithm:
-      collect target arrays for each server size for all purchased servers and home
-      collate targets per income for all servers of size purchasedServers.length + 1 (+1 for home) ???
-      go down list from top to bottom, inspect servers at the same tier to see if the current target is being run at that tier
-        if the target is being run at that tier, continue to the next target
-        else kill the lowest producing target and start the current target on the newly freed server
-      when starting a new target, specify the income of the target in the arg list so it can be compared later
+        collect target arrays for each server size for all purchased servers and home
+        collate targets per income for all servers of size purchasedServers.length + 1 (+1 for home) ???
+        go down list from top to bottom, inspect servers at the same tier to see if the current target is being run at that tier
+            if the target is being run at that tier, continue to the next target
+            else kill the lowest producing target and start the current target on the newly freed server
+        when starting a new target, specify the income of the target in the arg list so it can be compared later
 
     Colate:
-      Iterate over all tier arrays at the same time
-      Compare current item on all arrays, pick item with the highest income
-      if item.server is not in the master list, pop the item, add the item to the master list and increment a tracking variable for that tier
-        if the tier is full (tracker === tier.length) then clear out that tier's list or stop tracking it
-      if item.server is in the master list already, pop the item without adding it to the list
-      if all tiers are full, you're done
+        Iterate over all tier arrays at the same time
+        Compare current item on all arrays, pick item with the highest income
+        if item.server is not in the master list, pop the item, add the item to the master list and increment a tracking variable for that tier
+            if the tier is full (tracker === tier.length) then clear out that tier's list or stop tracking it
+        if item.server is in the master list already, pop the item without adding it to the list
+        if all tiers are full, you're done
 
     Launching new dispatcher:
-      scp dispatcher.ns to the host server, exec dispatcher.ns with the target, 1 thread and the raw income/s (for later comparison)
+        scp dispatcher.ns to the host server, exec dispatcher.ns with the target, 1 thread and the raw income/s (for later comparison)
     */
 }

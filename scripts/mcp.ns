@@ -1,7 +1,7 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { setns, mapHosts } from "./util.ns";
+import { setns, mapHosts, doProgramBuys } from "./util.ns";
 
 function printAugStats(stats) {
     if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult);
@@ -84,22 +84,6 @@ class Augmentation {
     toString() {
         return this.str;
     }
-}
-
-function doProgramBuys() {
-    let player = ns.getPlayer();
-
-    if (!player.tor && player.money > 200e3) ns.purchaseTor();
-
-    if (!ns.fileExists("BruteSSH.exe", "home") && player.money > 500e3) ns.purchaseProgram("BruteSSH.exe");
-
-    if (!ns.fileExists("FTPCrack.exe", "home") && player.money > 1500e3) ns.purchaseProgram("FTPCrack.exe");
-
-    if (!ns.fileExists("relaySMTP.exe", "home") && player.money > 5e6) ns.purchaseProgram("relaySMTP.exe");
-
-    if (!ns.fileExists("HTTPWorm.exe", "home") && player.money > 30e6) ns.purchaseProgram("HTTPWorm.exe");
-
-    if (!ns.fileExists("SQLInject.exe", "home") && player.money > 250e6) ns.purchaseProgram("SQLInject.exe");
 }
 
 async function doBackdoors() {
