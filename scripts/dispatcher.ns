@@ -1,13 +1,11 @@
-/** @type import(".").NS */
-let ns = null;
 var debug = false;
 
 function fltEq(a, b) {
     let epsilon = 0.05;
     return a > b - epsilon && a < b + epsilon;
 }
-
-function doWeaken(_hostname, _targetname, ramAllowance) {
+/** @param {import(".").NS } ns */
+function doWeaken(ns, _hostname, _targetname, ramAllowance) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
@@ -41,7 +39,8 @@ function doWeaken(_hostname, _targetname, ramAllowance) {
     ns.exec("weaken.ns", host.hostname, weakenThreads, target.hostname);
 }
 
-function doGrowAndWeaken(_hostname, _targetname, ramAllowance, highMoney) {
+/** @param {import(".").NS } ns */
+function doGrowAndWeaken(ns, _hostname, _targetname, ramAllowance, highMoney) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
@@ -97,7 +96,8 @@ function doGrowAndWeaken(_hostname, _targetname, ramAllowance, highMoney) {
     ns.exec("grow.ns", host.hostname, growThreads, target.hostname);
 }
 
-function doHackAndWeaken(_hostname, _targetname) {
+/** @param {import(".").NS } ns */
+function doHackAndWeaken(ns, _hostname, _targetname) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
@@ -135,7 +135,8 @@ function doHackAndWeaken(_hostname, _targetname) {
     ns.exec("hack.ns", host.hostname, hackThreads, target.hostname);
 }
 
-function doHGW(_hostname, _targetname, highMoney, lowMoney, ramAllowance, tspacer) {
+/** @param {import(".").NS } ns */
+function doHGW(ns, _hostname, _targetname, highMoney, lowMoney, ramAllowance, tspacer) {
     /*//////////// ALGO ////////////
         if hackRamCycle is greater than ramAllowance
         brute - compute ramAllowance / hackRamCycle ratio and reduce targetHackAmount by that ratio
@@ -245,7 +246,8 @@ function doHGW(_hostname, _targetname, highMoney, lowMoney, ramAllowance, tspace
     ns.exec("hack.ns", host.hostname, hackThreads, target.hostname, tHackOffset); // --ms offset, finish 1st
 }
 
-function calcHGWThreads(_hostname, _targetname, highMoney, lowMoney) {
+/** @param {import(".").NS } ns */
+function calcHGWThreads(ns, _hostname, _targetname, highMoney, lowMoney) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
@@ -266,7 +268,8 @@ function calcHGWThreads(_hostname, _targetname, highMoney, lowMoney) {
     return [hackWeakenThreads, growWeakenThreads, hackThreads, growThreads];
 }
 
-function calcHGWThreadsSmart(_hostname, _targetname, ramAllowance, tspacer) {
+/** @param {import(".").NS } ns */
+function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
@@ -356,7 +359,8 @@ function calcHGWThreadsSmart(_hostname, _targetname, ramAllowance, tspacer) {
     return [targetCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads];
 }
 
-function launchHGW(hostname, targetname, tspacer, tag, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads) {
+/** @param {import(".").NS } ns */
+function launchHGW(ns, hostname, targetname, tspacer, tag, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads) {
     let tweaken = ns.getWeakenTime(targetname);
     let tgrow = ns.getGrowTime(targetname);
     let thack = ns.getHackTime(targetname);
@@ -371,12 +375,11 @@ function launchHGW(hostname, targetname, tspacer, tag, hackWeakenThreads, growWe
     ns.exec("hack.ns", hostname, hackThreads, targetname, tHackOffset, tag); // --ms offset, finish 1st
 }
 
-/** @param {NS} _ns **/
-export async function main(_ns) {
-    ns = _ns;
-
+//** @param {NS} ns **/
+/** @param {import(".").NS } ns */
+export async function main(ns) {
     let ramOverride = ns.args[1];
-    let _hostname = "home";
+    let _hostname = ns.getHostname();
     let _targetname = ns.args[0];
     if (!_targetname) _targetname = "lexo-corp";
     let host = ns.getServer(_hostname);
@@ -387,13 +390,13 @@ export async function main(_ns) {
     let lowMoney = target.moneyMax * lowThresholdFactor;
     let highMoney = target.moneyMax * highThresholdFactor;
 
+    if (!ns.fileExists("grow.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
+    if (!ns.fileExists("weaken.ns", host.hostname)) await ns.scp("weaken.ns", "home", host.hostname);
+    if (!ns.fileExists("hack.ns", host.hostname)) await ns.scp("hack.ns", "home", host.hostname);
+
     let growRam = ns.getScriptRam("grow.ns"); // 1.75GB
     let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
     let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
-
-    if (!ns.fileExists("grow.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
-    if (!ns.fileExists("weaken.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
-    if (!ns.fileExists("hack.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
 
     let ramAllowance = host.maxRam - host.ramUsed;
     if (host.hostname === "home") ramAllowance -= 32;
@@ -420,8 +423,9 @@ export async function main(_ns) {
     // Weaken to minimum security
     target = ns.getServer(target.hostname);
     while (target.hackDifficulty > target.minDifficulty) {
-        doWeaken(host.hostname, target.hostname, ramAllowance);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
+        doWeaken(ns, host.hostname, target.hostname, ramAllowance);
+        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) 
+            await ns.sleep(500);
 
         if (debug) {
             let oldHackDifficulty = target.hackDifficulty;
@@ -435,8 +439,9 @@ export async function main(_ns) {
     // Grow to high threshold money
     target = ns.getServer(target.hostname);
     while (target.moneyAvailable < highMoney) {
-        doGrowAndWeaken(host.hostname, target.hostname, ramAllowance, highMoney);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
+        doGrowAndWeaken(ns, host.hostname, target.hostname, ramAllowance, highMoney);
+        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) 
+            await ns.sleep(500);
 
         if (debug) {
             let oldMoney = target.moneyAvailable;
@@ -462,6 +467,7 @@ export async function main(_ns) {
     let tweakenFullCycle = tweaken + tspacer * 3;
     let hgwCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads;
     [hgwCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads] = calcHGWThreadsSmart(
+        ns,
         host.hostname,
         target.hostname,
         ramAllowance,
@@ -471,6 +477,7 @@ export async function main(_ns) {
         for (let i = 0; i < hgwCycles; i++) {
             if (i !== 0) await ns.sleep(tCycleSpacer);
             launchHGW(
+                ns,
                 host.hostname,
                 target.hostname,
                 tspacer,

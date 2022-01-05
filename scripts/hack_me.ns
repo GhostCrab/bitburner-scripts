@@ -1,10 +1,5 @@
-/** @type import(".").NS */
-let ns = null;
-
 /** @param {NS} _ns **/
-export async function main(_ns) {
-    ns = _ns;
-
+export async function main(ns) {
     const hostname = ns.args[0];
 
     // Defines how much money a server should have before we hack it

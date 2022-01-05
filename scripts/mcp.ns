@@ -135,6 +135,8 @@ export async function main(_ns) {
     doProgramBuys();
     await doBackdoors();
 
+    return
+
     let player = ns.getPlayer();
     let incomePerSec = player.money / (player.playtimeSinceLastAug / 1000);
 
