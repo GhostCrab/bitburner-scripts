@@ -1,15 +1,7 @@
 /** @type import(".").NS */
 let ns = null;
 
-function mapHosts(hosts, parents, current) {
-    let newParents = parents.concat(current);
-    hosts[current] = newParents;
-
-    let children = ns.scan(current).filter((element) => !parents.includes(element));
-    for (const child of children) {
-        mapHosts(hosts, newParents, child);
-    }
-}
+import { setns, mapHosts } from "./util.ns";
 
 function printAugStats(stats) {
     if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult);
@@ -113,8 +105,7 @@ function doProgramBuys() {
 async function doBackdoors() {
     // "b-and-a"
     const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
-    let hosts = {};
-    mapHosts(hosts, [], "home");
+    let hosts = mapHosts();
 
     for (const [hostName, trail] of Object.entries(hosts)) {
         let server = ns.getServer(hostName);
@@ -135,8 +126,11 @@ async function doBackdoors() {
     }
 }
 
+/** @param {NS} _ns **/
 export async function main(_ns) {
     ns = _ns;
+
+    setns(ns);
 
     doProgramBuys();
     await doBackdoors();

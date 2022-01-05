@@ -53,6 +53,7 @@ function serverValueSort(h1, h2) {
     return 0;
 }
 
+/** @param {NS} _ns **/
 export async function main(_ns) {
     ns = _ns;
 

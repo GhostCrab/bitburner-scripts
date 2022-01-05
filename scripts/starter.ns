@@ -1,108 +1,46 @@
 /** @type import(".").NS */
 let ns = null;
 
-function softenServer(hostName) {
-	let server = ns.getServer(hostName)
+import { allHosts, canExecuteOnServer, serverIsHackable, serverMaxMoneySortDesc, setns, softenServer } from "./util.ns";
 
-	if (server.hasAdminRights) {
-		return
-	}
-
-	if (!server.sshPortOpen && ns.fileExists("BruteSSH.exe", "home")) {
-		ns.brutessh(hostName)
-	}
-
-	if (!server.ftpPortOpen && ns.fileExists("FTPCrack.exe", "home")) {
-		ns.ftpcrack(hostName)
-	}
-
-	if (!server.httpPortOpen && ns.fileExists("HTTPWorm.exe", "home")) {
-		ns.httpworm(hostName)
-	}
-
-	if (!server.smtpPortOpen && ns.fileExists("relaySMTP.exe", "home")) {
-		ns.relaysmtp(hostName)
-	}
-
-	if (!server.sqlPortOpen && ns.fileExists("SQLInject.exe", "home")) {
-		ns.sqlinject(hostName)
-	}
-
-	server = ns.getServer(hostName)
-	if (server.openPortCount >= server.numOpenPortsRequired) {
-		ns.nuke(hostName)
-	}
-}
-
-function serverIsHackable(hostName) {
-	const server = ns.getServer(hostName)
-	return server.hasAdminRights && (ns.getHackingLevel() >= server.requiredHackingSkill) && server.moneyMax > 1 && server.hostname !== 'NO SERVER'
-}
-
-function canExecuteOnServer(hostName) {
-	const server = ns.getServer(hostName)
-	return server.hasAdminRights && server.maxRam > 0 && !server.purchasedByPlayer
-}
-
-function serverValueSort(h1, h2) {
-	const s1 = ns.getServer(h1)
-	const s2 = ns.getServer(h2)
-
-	if (s1.moneyMax > s2.moneyMax) return -1
-	if (s1.moneyMax < s2.moneyMax) return 1
-	return 0
-}
-
-
+/** @param {NS} _ns **/
 export async function main(_ns) {
     ns = _ns;
 
-	const hostSet = new Set(["home"])
-	let hostQueue = ["home"]
-	let currentHost
-	while (currentHost = hostQueue.shift()) {
-		let newHosts = ns.scan(currentHost)
+    setns(ns);
 
-		for (const newHost of newHosts) {
-			if (!hostSet.has(newHost)) {
-				hostQueue.push(newHost)
-				hostSet.add(newHost)
-			}
-		}
-	}
+    let hostnames = allHosts();
+    for (const hostname of hostnames) {
+        softenServer(hostname);
+    }
 
-	let hostNames = Array.from(hostSet)
-	for (const hostName of hostNames) {
-		softenServer(hostName)
-	}
+    let hackableHosts = hostnames
+        .filter(serverIsHackable)
+        .filter((hostname) => ns.getServerMaxMoney(hostname) > 0)
+        .sort(serverMaxMoneySortDesc);
+    let rootHostsNoPurchased = hostnames
+        .filter(canExecuteOnServer)
+        .filter((hostname) => hostname.indexOf("pserv") !== -1 && hostname !== "home");
+    let hackMeRam = ns.getScriptRam("hack_me.ns", "home");
 
-	let hackableHosts = hostNames.filter(serverIsHackable).sort(serverValueSort)
-	let rootHosts = hostNames.filter(canExecuteOnServer)
-	let hackMeRam = ns.getScriptRam("hack_me.ns", "home")
+    let roundRobin = 0;
+    for (const hostname of rootHostsNoPurchased) {
+        let execMaxArgs = ["hack_me.ns", hostname, hackableHosts[roundRobin % hackableHosts.length]];
+        ns.tprintf("%s %s %s", "exec_max.ns", "home", execMaxArgs.toString());
 
-	let roundRobin = 0
-	for (const hostName of rootHosts) {
-		if (hostName === "home")
-			continue
+        while (ns.getServerMaxRam("home") - ns.getServerUsedRam("home") < ns.getScriptRam("exec_max.ns"))
+            await ns.sleep(500);
 
-		let execMaxArgs = ["hack_me.ns", hostName, hackableHosts[roundRobin % hackableHosts.length]]
-		ns.tprintf("%s %s %s", "exec_max.ns", "home", execMaxArgs.toString())
+        ns.exec("exec_max.ns", "home", 1, ...execMaxArgs);
+        roundRobin += 1;
+    }
 
-		while (ns.getServerMaxRam("home") - ns.getServerUsedRam("home") < ns.getScriptRam("exec_max.ns"))
-			await ns.sleep(500)
+    let homeRam = ns.getServerMaxRam("home") - 64;
+    let ramSlice = homeRam / hackableHosts.length;
+    let hackMeHomeThreads = Math.floor(ramSlice / hackMeRam);
 
-		ns.exec("exec_max.ns", "home", 1, ...execMaxArgs)
-		roundRobin += 1
-	}
-
-	let homeServer = ns.getServer("home")
-	let homeRam = homeServer.maxRam - 64
-	let ramSlice = homeRam / hackableHosts.length
-	let hackMeHomeThreads = Math.floor(ramSlice / hackMeRam)
-
-	if (hackMeHomeThreads <= 0)
-		return
-	for (const hostName of hackableHosts) {
-		ns.exec("hack_me.ns", "home", 1, hostName, ramSlice)
-	}
+    if (hackMeHomeThreads <= 0) return;
+    for (const hostName of hackableHosts) {
+        ns.exec("hack_me.ns", "home", 1, hostName, ramSlice);
+    }
 }

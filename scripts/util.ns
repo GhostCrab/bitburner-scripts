@@ -47,9 +47,35 @@ export function softenServer(hostname) {
 }
 
 export function serverIsHackable(hostname) {
-    return ns.hasRootAccess(hostname) && ns.getHackingLevel() >= getServerRequiredHackingLevel(hostname);
+    return (
+        ns.hasRootAccess(hostname) &&
+        ns.getHackingLevel() >= ns.getServerRequiredHackingLevel(hostname)
+    );
 }
 
 export function canExecuteOnServer(hostname) {
-    return ns.hasRootAccess(hostname);
+    return ns.hasRootAccess(hostname) && ns.getServerMaxRam(hostname) > 0;
+}
+
+export function mapHosts(hosts = {}, parents = [], current = "home") {
+    let newParents = parents.concat(current);
+    hosts[current] = newParents;
+
+    let children = ns.scan(current).filter((element) => !parents.includes(element));
+    for (const child of children) {
+        mapHosts(hosts, newParents, child);
+    }
+    return hosts
+}
+
+export function allHosts() {
+    return Object.keys(mapHosts());
+}
+
+export function serverMaxMoneySortDesc(a, b) {
+    return ns.getServerMaxMoney(b) - ns.getServerMaxMoney(a)
+}
+
+export function serverMaxMoneySortAsc(a, b) {
+    return ns.getServerMaxMoney(a) - ns.getServerMaxMoney(b)
 }

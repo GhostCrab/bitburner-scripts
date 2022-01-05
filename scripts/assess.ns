@@ -67,6 +67,7 @@ function assessHack(hostNames) {
     ns.tprintf("  %25s: %d/%d", "Ram Available", targetServer.maxRam - targetServer.ramUsed, targetServer.maxRam);
 }
 
+/** @param {NS} _ns **/
 export async function main(_ns) {
     ns = _ns;
 

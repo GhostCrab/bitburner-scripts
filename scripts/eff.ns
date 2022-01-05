@@ -1,0 +1,123 @@
+/** @type import(".").NS */
+let ns = null;
+
+import { allHosts, serverIsHackable, setns } from "./util.ns";
+
+function calcHackAmount(host, _target, ramAllowance) {
+    let player = ns.getPlayer();
+    let target = ns.getServer(_target.hostname);
+    target.hackDifficulty = target.minDifficulty;
+
+    let growRam = ns.getScriptRam("grow.ns"); // 1.75GB
+    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
+    let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
+
+    let targetHackAmount = target.moneyMax * 0.5;
+    let targetHackPercent = targetHackAmount / target.moneyMax;
+    let hackPercent = ns.formulas.hacking.hackPercent(target, player);
+    let hackThreads = Math.ceil(targetHackPercent / hackPercent);
+    let hackAmount = hackThreads * hackPercent * target.moneyMax;
+
+    let growThreads = calcMinGrowThreads(host, target, hackAmount);
+
+    let weakenAmountPerThread = ns.weakenAnalyze(1, host.cpuCores);
+
+    let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
+    let growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
+    let hackWeakenThreads = Math.ceil(hackSecIncrease / weakenAmountPerThread);
+    let growWeakenThreads = Math.ceil(growSecIncrease / weakenAmountPerThread);
+    let hackRamCycle =
+        hackThreads * hackRam + growThreads * growRam + (hackWeakenThreads + growWeakenThreads) * weakenRam;
+
+    if (hackRamCycle > ramAllowance) {
+        let failRatio = ramAllowance / hackRamCycle;
+        targetHackAmount = Math.min(targetHackAmount * (failRatio * 1.1), targetHackAmount);
+        targetHackPercent = targetHackAmount / target.moneyMax;
+        hackThreads = Math.ceil(targetHackPercent / hackPercent);
+    }
+
+    while (hackRamCycle > ramAllowance) {
+        hackThreads--;
+        hackAmount = hackThreads * hackPercent * target.moneyMax;
+
+        growThreads = calcMinGrowThreads(host, target, hackAmount);
+
+        hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
+        growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
+        hackWeakenThreads = Math.ceil(hackSecIncrease / weakenAmountPerThread);
+        growWeakenThreads = Math.ceil(growSecIncrease / weakenAmountPerThread);
+        hackRamCycle =
+            hackThreads * hackRam + growThreads * growRam + (hackWeakenThreads + growWeakenThreads) * weakenRam;
+    }
+
+    // ns.tprintf("  H: %d/%.2fGB; G: %d/%.2fGB; W: %d|%d/%.2fGB; T: %.2fGB (%s, %.2f%% of Max)",
+    //     hackThreads, hackThreads * hackRam,
+    //     growThreads, growThreads * growRam,
+    //     hackWeakenThreads, growWeakenThreads, (hackWeakenThreads + growWeakenThreads) * weakenRam,
+    //     hackRamCycle, ns.nFormat(hackAmount, "($0.000a)"), hackAmount / target.moneyMax * 100)
+
+    return hackAmount * ns.formulas.hacking.hackChance(target, player);
+}
+
+function calcMinGrowThreads(host, _target, hackAmount) {
+    let player = ns.getPlayer();
+    let target = ns.getServer(_target.hostname);
+    target.hackDifficulty = target.minDifficulty;
+
+    let targetGrowMult = 1;
+    if (hackAmount < 1) targetGrowMult = target.moneyMax / (target.moneyMax * hackAmount);
+    else targetGrowMult = target.moneyMax / (target.moneyMax - hackAmount);
+
+    let growThreads = Math.ceil(ns.growthAnalyze(target.hostname, targetGrowMult, host.cpuCores));
+    while (ns.formulas.hacking.growPercent(target, --growThreads, player, host.cpuCores) > targetGrowMult);
+
+    return growThreads + 1;
+}
+
+function calcHackRate(host, _target, ramAllowance) {
+    let target = _target;
+    let player = ns.getPlayer();
+    if (typeof target === "string" || target instanceof String) target = ns.getServer(target);
+
+    target.hackDifficulty = target.minDifficulty;
+
+    let tweaken = ns.formulas.hacking.weakenTime(target, player) / 1000;
+    let hackAmount = calcHackAmount(host, target, ramAllowance);
+
+    return hackAmount / tweaken;
+}
+
+/** @param {NS} _ns **/
+export async function main(_ns) {
+    ns = _ns;
+
+    setns(ns);
+
+    let player = ns.getPlayer();
+
+    let host = ns.getServer("home");
+    let ramAllowance = host.maxRam - 32;
+
+    let hostnames = allHosts()
+        .filter(serverIsHackable)
+        .filter((hostname) => ns.getServerMaxMoney(hostname) > 0)
+        .sort((a, b) => calcHackRate(host, b, ramAllowance) - calcHackRate(host, a, ramAllowance));
+
+    for (let hostname of hostnames) {
+        let target = ns.getServer(hostname);
+        target.moneyAvailable = target.moneyMax;
+        target.hackDifficulty = target.minDifficulty;
+
+        let tweaken = ns.formulas.hacking.weakenTime(target, player) / 1000;
+        let hackAmount = calcHackAmount(host, target, ramAllowance);
+
+        ns.tprintf(
+            "%20s %s/s %s [%.2f%% of Max] every %s",
+            target.hostname,
+            ns.nFormat(hackAmount / tweaken, "($0.000a)"),
+            ns.nFormat(hackAmount, "($0.000a)"),
+            (hackAmount / target.moneyMax) * 100,
+            ns.tFormat(tweaken * 1000)
+        );
+    }
+}

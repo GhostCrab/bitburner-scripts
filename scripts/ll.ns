@@ -13,6 +13,7 @@ function isOther(filename) {
     return !isScript(filename) && !isProgram(filename);
 }
 
+/** @param {NS} _ns **/
 export async function main(_ns) {
     ns = _ns;
 

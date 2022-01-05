@@ -322,7 +322,7 @@ function calcHGWThreadsSmart(_hostname, _targetname, ramAllowance, tspacer) {
         if (hackThreads === minHackThreads) break;
     }
 
-    if (hackRamCycle > target.moneyMax) {
+    if (hackRamCycle > ramFit) {
         let oldTargetCycles = targetCycles;
         targetCycles = Math.floor(hackRamCycle / ramAllowance);
         ns.tprintf(
@@ -371,6 +371,7 @@ function launchHGW(hostname, targetname, tspacer, tag, hackWeakenThreads, growWe
     ns.exec("hack.ns", hostname, hackThreads, targetname, tHackOffset, tag); // --ms offset, finish 1st
 }
 
+/** @param {NS} _ns **/
 export async function main(_ns) {
     ns = _ns;
 
@@ -391,9 +392,7 @@ export async function main(_ns) {
     let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
 
     if (!ns.fileExists("grow.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
-
     if (!ns.fileExists("weaken.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
-
     if (!ns.fileExists("hack.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
 
     let ramAllowance = host.maxRam - host.ramUsed;
