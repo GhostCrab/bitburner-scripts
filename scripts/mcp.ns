@@ -87,8 +87,7 @@ class Augmentation {
 }
 
 async function doBackdoors() {
-    // "b-and-a"
-    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
+    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a"];
     let hosts = mapHosts();
 
     for (const [hostName, trail] of Object.entries(hosts)) {

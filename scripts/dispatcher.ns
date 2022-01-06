@@ -1,19 +1,5 @@
 var debug = false;
 
-/*
-
-RUNTIME ERROR
-dispatcher.ns@pserv-4
-Args: ["alpha-ent"]
-
-growthAnalyze: Invalid argument: growth must be numeric and >= 1, is 0.9998154800600708.
-
-Stack:
-dispatcher.ns:L316@calcHGWThreadsSmart
-dispatcher.ns:L469@Module.main
-
-*/
-
 function fltEq(a, b) {
     let epsilon = 0.05;
     return a > b - epsilon && a < b + epsilon;
@@ -314,13 +300,18 @@ function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) 
     let targetCycles = Math.floor(tweakenFullCycle / tCycleSpacer);
     let ramFit = Math.floor(ramAllowance / targetCycles);
 
+    // dont force a cycle into less than 16GB
+    while (ramFit < 16) {
+        targetCycles--;
+        ramFit = Math.floor(ramAllowance / targetCycles);
+    }
+
     if (hackRamCycle > ramFit) {
         let crunchRatio = ramFit / hackRamCycle;
         targetHackAmount = Math.min(targetHackAmount * (crunchRatio * 1.1), targetHackAmount);
         if (debug) ns.tprintf("  ramFit / hackRamCycle = %.0f%% (%.0f%%)", crunchRatio * 100, crunchRatio * 1.1 * 100);
     }
 
-    let minHackThreads = 1;
     while (hackRamCycle > ramFit) {
         targetHackAmount -= targetHackAmountStep;
         hackThreads = Math.ceil(ns.hackAnalyzeThreads(target.hostname, targetHackAmount));
@@ -335,25 +326,9 @@ function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) 
         growWeakenThreads = Math.ceil(growSecIncrease / weakenAmountPerThread);
         hackRamCycle =
             hackThreads * hackRam + growThreads * growRam + (hackWeakenThreads + growWeakenThreads) * weakenRam;
-
-        if (hackThreads === minHackThreads) break;
     }
 
-    if (hackRamCycle > ramFit) {
-        let oldTargetCycles = targetCycles;
-        targetCycles = Math.floor(hackRamCycle / ramAllowance);
-        ns.tprintf(
-            "WARNING:  Hit minium hackThreads (%d) and did not fit into target ram allocation (%.2fGB) / %d cycles; New ram allocation is %.2fGB over %d cycles",
-            minHackThreads,
-            ramFit,
-            oldTargetCycles,
-            hackRamCycle,
-            targetCycles
-        );
-    }
-
-    if (debug) {
-        let tweaken = ns.getWeakenTime(target.hostname);
+    //if (debug) {
         ns.tprintf(
             "  Calling Hack (%.4f%% of Max) with %d threads (%.2fGB), Grow with %d threads (%.2fGB), and Weaken with %d/%d threads (%.2fGB); Total %.2fGB for %s over %d Cycles",
             (hackAmount / target.moneyMax) * 100,
@@ -368,13 +343,23 @@ function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) 
             ns.tFormat(tweaken),
             targetCycles
         );
-    }
+    //}
 
     return [targetCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads];
 }
 
 /** @param {import(".").NS } ns */
-function launchHGW(ns, hostname, targetname, tspacer, tag, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads) {
+function launchHGW(
+    ns,
+    hostname,
+    targetname,
+    tspacer,
+    tag,
+    hackWeakenThreads,
+    growWeakenThreads,
+    hackThreads,
+    growThreads
+) {
     let tweaken = ns.getWeakenTime(targetname);
     let tgrow = ns.getGrowTime(targetname);
     let thack = ns.getHackTime(targetname);
@@ -413,7 +398,7 @@ export async function main(ns) {
     let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
 
     let ramAllowance = host.maxRam - host.ramUsed;
-    if (host.hostname === "home") ramAllowance -= 32;
+    if (host.hostname === "home") ramAllowance -= 48;
 
     if (ramOverride) {
         if (ramOverride < 1) {
@@ -438,8 +423,7 @@ export async function main(ns) {
     target = ns.getServer(target.hostname);
     while (target.hackDifficulty > target.minDifficulty) {
         doWeaken(ns, host.hostname, target.hostname, ramAllowance);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) 
-            await ns.sleep(500);
+        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
 
         if (debug) {
             let oldHackDifficulty = target.hackDifficulty;
@@ -454,8 +438,7 @@ export async function main(ns) {
     target = ns.getServer(target.hostname);
     while (target.moneyAvailable < highMoney) {
         doGrowAndWeaken(ns, host.hostname, target.hostname, ramAllowance, highMoney);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) 
-            await ns.sleep(500);
+        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
 
         if (debug) {
             let oldMoney = target.moneyAvailable;

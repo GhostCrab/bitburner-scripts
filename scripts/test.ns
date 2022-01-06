@@ -1,0 +1,43 @@
+import { setns, allHosts } from "./util.ns";
+
+/** @param {import(".").NS } ns */
+export async function main(ns) {
+	function arrComp (a, b) {
+		if (!a || !b)
+			return false
+	
+		if (a.length != b.length)
+			return false;
+	
+		for (let i = 0; i < a.length; i++) {
+			if (a[i] !== b[i])
+				return false
+		}
+	
+		return true
+	}
+
+	
+	let target = 5
+	let combinatoins = []
+
+	
+	let a = [1, 2, 3, 4, 5]
+	let b = [1, 2, 3, 4, 5]
+	let c = [5, 4, 3, 2, 1]
+
+	if (arrComp(a, b))
+		ns.tprintf("a === b")
+	else 
+		ns.tprintf("a !== b")
+
+	if (arrComp(a, c))
+		ns.tprintf("a === c")
+	else 
+		ns.tprintf("a !== c")
+
+	if (arrComp(a, c.sort((a, b) => a - b)))
+		ns.tprintf("a === sorted c")
+	else
+		ns.tprintf("a !== sorted c")
+}

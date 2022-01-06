@@ -10,7 +10,7 @@ function calcHackAmount(ns, host, _target, ramAllowance) {
     let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
     let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
 
-    let targetHackAmount = target.moneyMax * 0.5;
+    let targetHackAmount = target.moneyMax * 0.99;
     let targetHackPercent = targetHackAmount / target.moneyMax;
     let hackPercent = ns.formulas.hacking.hackPercent(target, player);
     let hackThreads = Math.ceil(targetHackPercent / hackPercent);
@@ -121,6 +121,7 @@ function getOrderedTargetArr(ns, _host) {
 
 /** @param {import(".").NS } ns */
 function testOutput(ns) {
+    let player = ns.getPlayer();
     let host = ns.getServer("home");
     let targetnames = getOrderedTargetArr(ns, host);
 
@@ -145,23 +146,37 @@ function testOutput(ns) {
     }
 }
 
+function removeTarget(arr, key, value) {
+    let i = 0;
+    while (i < arr.length) {
+        if (arr[i][key] === value) {
+            arr.splice(i, 1);
+        } else {
+            ++i;
+        }
+    }
+    return arr;
+}
+
 /** @param {import(".").NS } ns */
 export async function main(ns) {
     setns(ns);
 
     let player = ns.getPlayer();
     let allHostnames = allHosts();
+    let attackScript = "dispatcher.ns";
 
     doProgramBuys();
 
     // soften all servers
-    for (const hostName of allHosts()) {
+    for (const hostName of allHostnames) {
         softenServer(hostName);
+        await ns.scp(attackScript, "home", hostName)
     }
 
     // create a dictionary mapping server size to server name array (with a special bucket for "home")
     let hostSizeDict = {};
-    for (let hostname of allHosts().filter(canExecuteOnServer)) {
+    for (let hostname of allHostnames.filter(canExecuteOnServer)) {
         let key = ns.getServerMaxRam(hostname);
 
         if (hostname === "home") key = "home";
@@ -202,8 +217,111 @@ export async function main(ns) {
     }
     allTargets = allTargets.sort((a, b) => b.income - a.income);
 
-    for (let target of allTargets) {
-        ns.tprintf("%20s: %10s/s %s", target.targetname, ns.nFormat(target.income, "($0.000a)"), target.size.toString());
+    // Set up tracker to decide how many targets are needed for each bucket
+    let bucketTracker = {};
+    for (const [key, value] of Object.entries(hostSizeDict)) {
+        bucketTracker[key] = value.length;
+    }
+
+    // Iterate over allTargets, taking the next best target/bucket pair and removing all lesser targets in the
+    // array. If all hosts in a bucket are accounted for, remove all lesser targets using that bucket. Finish
+    // iterating once either all host servers are accounted for, or we've run out of targets.
+    let finalTargets = [];
+    while (allTargets.length > 0) {
+        let target = allTargets.shift();
+        allTargets = allTargets.filter((t) => target.targetname !== t.targetname);
+
+        if (--bucketTracker[target.size] === 0) {
+            allTargets = allTargets.filter((t) => target.size !== t.size);
+        }
+
+        finalTargets.push(target);
+    }
+
+    // Assign a target to a host in the target's bucket. Kill all hosts that are attacking targets not in this bucket.
+    // Check to see if a host in the target's bucket is already attacking the target. If it is, skip the target. Otherwise
+    // kick off attack on that target.
+    for (const [bucket, hostnames] of Object.entries(hostSizeDict)) {
+        // get all targets for this bucket
+        let targetnames = [];
+        for (let target of finalTargets) {
+            if (target.size === bucket) targetnames.push(target.targetname);
+        }
+
+        //ns.tprintf("%s: [%s] [%s]", bucket, targetnames, hostnames)
+
+        // iterate over all hosts in this bucket, killing processes on any that are attacking something not in targets and
+        // removing targets from the target array that are already being attacked
+        for (let hostname of hostnames) {
+            let ps = ns.ps(hostname);
+            let dokill = false;
+            for (let psInfo of ps) {
+                if (psInfo.filename === attackScript) {
+                    let attackTargetnameIdx = targetnames.indexOf(psInfo.args[0]);
+                    if (attackTargetnameIdx === -1) {
+                        ns.tprintf("Killing %s running on %s targeting %s", attackScript, hostname, psInfo.args[0]);
+                        dokill = true;
+                    } else {
+                        targetnames.splice(attackTargetnameIdx, 1);
+                    }
+                    break;
+                }
+            }
+
+            // If we're killing on home, make sure to only kill attack scripts so we dont kill ourselves
+            if (dokill) {
+                if (hostname !== "home") {
+                    ns.killall(hostname);
+                } else {
+                    for (let psInfo of ps) {
+                        if (
+                            psInfo.filename === attackScript ||
+                            psInfo.filename === "weaken.ns" ||
+                            psInfo.filename === "grow.ns" ||
+                            psInfo.filename === "hack.ns"
+                        ) {
+                            ns.kill(psInfo.filename, hostname, psInfo.args);
+                        }
+                    }
+                }
+            }
+        }
+
+        // In case all the targets are accounted for, continue to the next bucket
+        if (targetnames.length === 0) continue;
+
+        // iterate over all hosts in this bucket, if the host is free, run the attack script on it with one of the targets
+        for (let hostname of hostnames) {
+            let ps = ns.ps(hostname);
+            let hostfree = true;
+            for (let psInfo of ps) {
+                if (psInfo.filename === attackScript) {
+                    hostfree = false;
+                    break;
+                }
+            }
+
+            if (hostfree) {
+                let targetname = targetnames.shift();
+                ns.tprintf("Starting %s on %s targeting %s", attackScript, hostname, targetname);
+
+                if (!ns.fileExists(attackScript, hostname)) await ns.scp(attackScript, "home", hostname);
+
+                ns.exec(attackScript, hostname, 1, targetname);
+            }
+
+            if (targetnames.length === 0)
+                break
+        }
+    }
+
+    for (let target of finalTargets) {
+        ns.tprintf(
+            "%20s: %10s/s %s",
+            target.targetname,
+            ns.nFormat(target.income, "($0.000a)"),
+            target.size.toString()
+        );
     }
 
     /*
@@ -224,6 +342,6 @@ export async function main(ns) {
         if all tiers are full, you're done
 
     Launching new dispatcher:
-        scp dispatcher.ns to the host server, exec dispatcher.ns with the target, 1 thread and the raw income/s (for later comparison)
+        scp dispatcher.ns to the host server, exec dispatcher.ns with the target, 1 thread
     */
 }
