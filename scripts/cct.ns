@@ -7,229 +7,52 @@ function printCCT(ns, cct) {
     ns.tprintf("  %s", cct.data);
 }
 
+/** @param {import(".").NS } ns */
+function answerCCT(ns, cct, answer) {
+    let reward = ns.codingcontract.attempt(answer, cct.name, cct.host, { returnReward: true });
+
+    if (reward === "") {
+        ns.tprintf("ERROR: Failed to solve %s:%s of type %s", cct.host, cct.name, cct.type);
+        ns.tprintf("  data: %s; answer: %s", cct.data.toString(), answer.toString());
+    } else {
+        ns.tprintf("SUCCESS: Solved %s:%s => %s", cct.host, cct.name, reward);
+    }
+}
+
 class CCT {
     constructor(ns, hostname, filename) {
-		this.name = filename;
-		this.host = hostname;
-		this.type = ns.codingcontract.getContractType(filename, hostname);
-		this.desc = ns.codingcontract.getDescription(filename, hostname);
-		this.data = ns.codingcontract.getData(filename, hostname);
+        this.name = filename;
+        this.host = hostname;
+        this.type = ns.codingcontract.getContractType(filename, hostname);
+        this.desc = ns.codingcontract.getDescription(filename, hostname);
+        this.data = ns.codingcontract.getData(filename, hostname);
 
-		this.solve = _.bind(CCT["solve" + this.type.replace(/\s/g, "")], null, _, this)
-	}
-	print(ns) {
-		ns.tprintf("%s %s:", this.host, this.name);
-		ns.tprintf("  %s", this.type);
-		ns.tprintf("  %s", this.desc);
-		ns.tprintf("  %s", this.data);
-	}
+        this.solve = _.bind(CCT["solve" + this.type.replace(/\s/g, "")], null, _, this);
+
+		this.print(ns)
+    }
+    print(ns) {
+        ns.tprintf("%s %s:", this.host, this.name);
+        ns.tprintf("  %s", this.type);
+        ns.tprintf("  %s", this.desc);
+        ns.tprintf("  %s", this.data);
+    }
+
     static solveTotalWaystoSum(ns, cct) {
-		/*
-		It is possible write four as a sum in exactly four different ways:
-	  
-			3 + 1
-			2 + 2
-			2 + 1 + 1
-			1 + 1 + 1 + 1
+        let N = cct.data;
+        let dp = Array.from({ length: N + 1 }, (_, i) => 0);
 
-			//////////
+        dp[0] = 1;
 
-			1 1 1 1 1 1 1 1
-			2 1 1 1 1 1 1
-			3 1 1 1 1 1
-			4 1 1 1 1
-			5 1 1 1
-			6 1 1
-			7 1
-			=============  XX increment the 2nd factor, start the first factor on the same as the 2nd
-			2 2 1 1 1 1
-			3 2 1 1 1
-			4 2 1 1
-			5 2 1
-			6 2
-			=============
-			3 3 1 1
-			4 3 1
-			=============
-			4 4
-			=============  XX increment the 3rd factor, start the 1st and second on the same as the 3rd
-			2 2 2 1 1
-			2 2 2 2
-			3 2 2 1
-			4 2 2
-			=============
-			3 3 2
+        for (let row = 1; row < N + 1; row++) {
+            for (let col = 1; col < N + 1; col++) {
+                if (col >= row) {
+                    dp[col] = dp[col] + dp[col - row];
+                }
+            }
+        }
 
-			===================================================
-			1111111111
-			211111111
-			31111111
-			4111111
-			511111
-			61111
-			7111
-			811
-			91
-			--------------------------- 2nd factor
-			22111111
-			3211111
-			421111
-			52111
-			6211
-			721
-			82
-			------- 2
-			331111
-			43111
-			5311
-			631
-			73
-			------- 2
-			4411
-			541
-			64
-			------- 2
-			55
-			-------------------------- 3rd factor
-			2221111
-			322111
-			42211
-			5221
-			622
-			-------- 2
-			33211
-			4321
-			432
-			-------- 2
-			442
-			-------- 2
-			3331
-			433
-			--------------------------- 4th factor
-			222211
-			32221
-			4222
-			------- 2
-			3322
-
-			==========================
-			1111111111
-			222222222
-			33333333
-			4444444
-			555555
-			66666
-			7777
-			888
-			99
-
-			1111111111
-			222222221
-			33333321
-			4444321
-			554321
-			65432
-			7654
-			876
-			98
-
-			 1111111111 O
-			
-			2 11111111 O
-			1 11111111 X
-
-			32 111111 X
-			31 111111 O
-			22 111111 O
-			21 111111 X
-			11 111111 X
-
-			432 1111 X
-			431 1111 X
-			422 1111 X
-			421 1111 X
-			411 1111 O
-			332 1111 X
-			331 1111 X
-			322 1111 X
-			321 1111 O
-			311 1111 X
-			222 1111 O
-			221 1111 X
-			211 1111 X
-			111 1111 X
-
-			5432 11
-			5431 11
-			5422 11
-			5421 11
-			5411 11
-			5332 11
-			5331 11
-			5322 11
-			5321 11
-			5311 11
-			5222 11
-			5221 11
-			5211 11
-			5111 11 O
-			4432 11
-			4431 11
-			4422 11
-			4421 11
-			4411 11
-			4332 11
-			4331 11
-			4322 11
-			4321 11
-			4311 11
-			4222 11
-			4221 11
-			4211 11 O
-			4111 11
-			3332 11
-			3331 11
-			3322 11
-			3321 11
-			3311 11 O
-			3222 11
-			3221 11 O
-			3211 11
-			3111 11
-			2222 11 O
-			2222 11
-			2221 11
-			2211 11
-			2111 11
-			1111 11
-
-			65432
-
-			7654
-
-			876
-
-			98
-
-			increment 1st factor
-			increment 1st factor, remove last factor until ther are no more 1s
-			increment 2nd factor, remove last factor, increment 1st factor until it matches 2nd factor
-				increment 1st factor, remove last factor intil ther are no more 1s
-			increment 2nd factor, remove last factor until there are no more 1s
-
-
-
-
-	  
-		How many different ways can the number 30 be written as a sum of at least two positive integers?
-
-		start with N = target to account for 1*N (1)
-		keep increasing the 1st factor by 1 unil it's just N-1 + 1 (N-1)
-
-		*/
-
-
-        let target = this.data
+        answerCCT(ns, cct, dp[N] - 1);
     }
     static solveSubarraywithMaximumSum(ns, cct) {
         ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
@@ -244,7 +67,42 @@ class CCT {
         ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
     }
     static solveGenerateIPAddresses(ns, cct) {
-        ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
+        function validate(str) {
+            if (str === "0") return true;
+            if (str.length > 1 && str[0] === "0") return false;
+            if (str.length > 3) return false;
+            return parseInt(str) < 255;
+        }
+
+        let results = [];
+        for (let i = 1; i <= 3; i++) {
+            if (cct.data.length - i > 9) continue;
+
+            let a = cct.data.substr(0, i);
+
+            if (!validate(a)) continue;
+
+            for (let j = 1; j <= 3; j++) {
+                if (cct.data.length - (i + j) > 6) continue;
+
+                let b = cct.data.substr(i, j);
+
+                if (!validate(b)) continue;
+
+                for (let k = 1; k <= 3; k++) {
+                    if (cct.data.length - (i + j + k) > 3) continue;
+
+                    let c = cct.data.substr(i + j, k);
+                    let d = cct.data.substr(i + j + k);
+
+                    if (validate(c) && validate(d)) {
+                        results.push(a + "." + b + "." + c + "." + d);
+                    }
+                }
+            }
+        }
+
+        answerCCT(ns, cct, results);
     }
     static solveAlgorithmicStockTraderI(ns, cct) {
         ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
@@ -259,7 +117,20 @@ class CCT {
         ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
     }
     static solveMinimumPathSuminaTriangle(ns, cct) {
-        ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
+        function trav(tree, paths = [], tally = 0, level = 0, idx = 0) {
+            let newTally = tally + tree[level][idx];
+
+            if (level === tree.length - 1) {
+                paths.push(newTally);
+            } else {
+                trav(tree, paths, newTally, level + 1, idx);
+                trav(tree, paths, newTally, level + 1, idx + 1);
+            }
+
+            return paths;
+        }
+
+        answerCCT(ns, cct, trav(cct.data).sort((a, b) => a - b)[0]);
     }
     static solveUniquePathsinaGridI(ns, cct) {
         ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
@@ -273,7 +144,7 @@ class CCT {
     static solveFindAllValidMathExpressions(ns, cct) {
         ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
     }
-	static solveFindLargestPrimeFactor(ns, cct) {
+    static solveFindLargestPrimeFactor(ns, cct) {
         ns.tprintf("WARNING: TODO: Write solver for cct's of type '%s' to solve %s:%s", cct.type, cct.host, cct.name);
     }
 }
@@ -292,7 +163,9 @@ export async function main(ns) {
         ccts.push(new CCT(ns, hostname, ls[0]));
     }
 
-	for (const cct of ccts) {
-		cct.solve(ns)
-	}
+    sprintf("found %d ccts", ccts.length);
+
+    for (const cct of ccts) {
+        cct.solve(ns);
+    }
 }

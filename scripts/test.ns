@@ -1,43 +1,19 @@
-import { setns, allHosts } from "./util.ns";
-
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-	function arrComp (a, b) {
-		if (!a || !b)
-			return false
-	
-		if (a.length != b.length)
-			return false;
-	
-		for (let i = 0; i < a.length; i++) {
-			if (a[i] !== b[i])
-				return false
-		}
-	
-		return true
-	}
+    let N = 4;
+    let dp = Array.from({ length: N + 1 }, (_, i) => 0);
 
-	
-	let target = 5
-	let combinatoins = []
+    dp[0] = 1;
 
-	
-	let a = [1, 2, 3, 4, 5]
-	let b = [1, 2, 3, 4, 5]
-	let c = [5, 4, 3, 2, 1]
+    for (let row = 1; row < N + 1; row++) {
+        for (let col = 1; col < N + 1; col++) {
+			ns.tprintf("[%s]", dp)
+			ns.tprintf("  => [%d:%d] dp[col]: %d", dp[col])
+            if (col >= row) {
+                dp[col] = dp[col] + dp[col - row];
+			}
+        }
+    }
 
-	if (arrComp(a, b))
-		ns.tprintf("a === b")
-	else 
-		ns.tprintf("a !== b")
-
-	if (arrComp(a, c))
-		ns.tprintf("a === c")
-	else 
-		ns.tprintf("a !== c")
-
-	if (arrComp(a, c.sort((a, b) => a - b)))
-		ns.tprintf("a === sorted c")
-	else
-		ns.tprintf("a !== sorted c")
+    ns.tprintf("Ways: %d => %d", N, dp[N]);
 }
