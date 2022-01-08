@@ -4,6 +4,7 @@ function fltEq(a, b) {
     let epsilon = 0.05;
     return a > b - epsilon && a < b + epsilon;
 }
+
 /** @param {import(".").NS } ns */
 function doWeaken(ns, _hostname, _targetname, ramAllowance) {
     let host = ns.getServer(_hostname);
@@ -318,6 +319,12 @@ function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) 
         hackAmount = ns.hackAnalyze(target.hostname) * hackThreads * target.moneyAvailable;
 
         targetGrowMult = target.moneyMax / (target.moneyMax - hackAmount);
+        let dobreak = false;
+        if (targetGrowMult < 1) {
+            targetGrowMult = 1.0000001;
+            dobreak = true;
+        }
+
         growThreads = Math.ceil(ns.growthAnalyze(target.hostname, targetGrowMult, host.cpuCores));
 
         hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
@@ -326,23 +333,25 @@ function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) 
         growWeakenThreads = Math.ceil(growSecIncrease / weakenAmountPerThread);
         hackRamCycle =
             hackThreads * hackRam + growThreads * growRam + (hackWeakenThreads + growWeakenThreads) * weakenRam;
+
+        if (dobreak) break;
     }
 
     //if (debug) {
-        ns.tprintf(
-            "  Calling Hack (%.4f%% of Max) with %d threads (%.2fGB), Grow with %d threads (%.2fGB), and Weaken with %d/%d threads (%.2fGB); Total %.2fGB for %s over %d Cycles",
-            (hackAmount / target.moneyMax) * 100,
-            hackThreads,
-            hackThreads * hackRam,
-            growThreads,
-            growThreads * growRam,
-            hackWeakenThreads,
-            growWeakenThreads,
-            (hackWeakenThreads + growWeakenThreads) * weakenRam,
-            hackRamCycle,
-            ns.tFormat(tweaken),
-            targetCycles
-        );
+    ns.tprintf(
+        "  Calling Hack (%.4f%% of Max) with %d threads (%.2fGB), Grow with %d threads (%.2fGB), and Weaken with %d/%d threads (%.2fGB); Total %.2fGB for %s over %d Cycles",
+        (hackAmount / target.moneyMax) * 100,
+        hackThreads,
+        hackThreads * hackRam,
+        growThreads,
+        growThreads * growRam,
+        hackWeakenThreads,
+        growWeakenThreads,
+        (hackWeakenThreads + growWeakenThreads) * weakenRam,
+        hackRamCycle,
+        ns.tFormat(tweaken),
+        targetCycles
+    );
     //}
 
     return [targetCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads];
@@ -398,7 +407,7 @@ export async function main(ns) {
     let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
 
     let ramAllowance = host.maxRam - host.ramUsed;
-    if (host.hostname === "home") ramAllowance -= 48;
+    //if (host.hostname === "home") ramAllowance -= 48;
 
     if (ramOverride) {
         if (ramOverride < 1) {

@@ -72,18 +72,19 @@ function listServers(hosts) {
         const rootStr = server.hasAdminRights ? "[O]" : "[X]";
         const hackStr = ns.getHackingLevel() >= server.requiredHackingSkill ? "[O]" : "[X]";
         let trailStr = "";
-        for (const i of hosts[hostName]) {
-            if (i === hosts[hostName][hosts[hostName].length - 1]) trailStr += `${i}`;
-            else trailStr += `${i}.`;
-        }
+        // for (const i of hosts[hostName]) {
+        //     if (i === hosts[hostName][hosts[hostName].length - 1]) trailStr += `${i}`;
+        //     else trailStr += `${i}.`;
+        // }
         ns.tprintf(
-            "%20s %-9s %4d %s %s %6d %s",
+            "%20s %-9s %4d %s %s %6d %.2f %s",
             server.hostname,
             ns.nFormat(server.moneyMax, "($0.000a)"),
             server.requiredHackingSkill,
             rootStr,
             hackStr,
             server.maxRam,
+            Math.ceil(ns.getWeakenTime(server.hostname) / 1000) / 60,
             trailStr
         );
     }

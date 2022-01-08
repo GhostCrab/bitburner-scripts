@@ -1,0 +1,311 @@
+var debug = true;
+
+class HackEnv {
+    /** @param {import(".").NS } ns */
+    constructor(ns, targetname, hostname = "", ramAllowance = -1, highMoney = -1, lowMoney = -1, tspacer = 200) {
+        this.targetname = targetname;
+        this.hostname = hostname === "" ? ns.getHostname() : hostname;
+        this.ramAllowance =
+            ramAllowance === -1
+                ? ns.getServerMaxRam(this.hostname) - ns.getServerUsedRam(this.hostname)
+                : ramAllowance < 1
+                ? (ns.getServerMaxRam(this.hostname) - ns.getServerUsedRam(this.hostname)) * ramAllowance
+                : ramAllowance;
+        this.highMoney = highMoney === -1 ? ns.getServerMaxMoney(this.targetname) : highMoney;
+        this.lowMoney = lowMoney === -1 ? ns.getServerMaxMoney(this.targetname) * 0.05 : lowMoney;
+        this.tspacer = tspacer; // CONST
+        this.batchHack = false;
+
+        this.cores = 1; // home gets no core benefits to save RAM
+
+        // Target Info
+        this.targetSec = 0;
+        this.targetSecMin = 0;
+        this.targetMoneyAvailable = 0;
+
+        // Weaken Info
+        this.weakenRam = 1.75; // CONST
+        this.weakenAmountPerThread = 0;
+        this.weakenThreads = 0;
+        this.weakenThreadsGrow = 0;
+        this.weakenThreadsHack = 0;
+        this.weakenTime = 0;
+        this.weakenTimeFullCycle = 0;
+
+        // Grow Info
+        this.growRam = 1.75; // CONST
+        this.growMult = 0;
+        this.growThreads = 0;
+        this.growSecIncrease = 0;
+        this.growTime = 0;
+
+        // Hack Info
+        this.hackRam = 1.7; // CONST
+        this.hackTotalEst = 0;
+        this.hackTotal = 0;
+        this.hackTotalStep = 0;
+        this.hackThreads = 0;
+        this.hackSecIncrease = 0;
+        this.hackTime = 0;
+        this.hackPercentPerThread = 0;
+
+        // Batch Cycle Info
+        this.ramPerCycle = 0;
+        this.cycleSpacer = tspacer * 4;
+        this.cycleTarget = 0;
+        this.cycleTotal = 0;
+    }
+
+    async prep(ns) {
+        if (!ns.fileExists("grow.ns", this.hostname)) await ns.scp("grow.ns", "home", this.hostname);
+        if (!ns.fileExists("weaken.ns", this.hostname)) await ns.scp("weaken.ns", "home", this.hostname);
+        if (!ns.fileExists("hack.ns", this.hostname)) await ns.scp("hack.ns", "home", this.hostname);
+    }
+
+    printRamOverride(ns) {
+        let maxRam = ns.getServerMaxRam(this.hostname);
+        let ramFraction = maxRam / this.ramAllowance;
+        ns.tprintf(
+            "Overriding availble host RAM max to %.2f (%.2f%% of %.2f)",
+            this.ramAllowance,
+            (this.ramAllowance / maxRam) * 100,
+            maxRam
+        );
+    }
+
+    /** @param {import(".").NS } ns */
+    updateForW(ns, useAllRam = false) {
+        // Target Info
+        this.targetSec = ns.getServerSecurityLevel(this.targetname);
+        this.targetSecMin = ns.getServerMinSecurityLevel(this.targetname);
+        let secDiff = this.targetSec - this.targetSecMin;
+
+        // Weaken Info
+        this.weakenTime = ns.getWeakenTime(this.targetname);
+        this.weakenAmountPerThread = ns.weakenAnalyze(1, this.cores);
+        this.weakenThreads = Math.ceil(secDiff / this.weakenAmountPerThread);
+
+        this.ramPerCycle = this.weakenThreads * this.weakenRam;
+
+        if (this.ramPerCycle > this.ramAllowance || useAllRam) {
+            this.weakenThreads = Math.floor(this.ramAllowance / this.weakenRam);
+            this.ramPerCycle = this.weakenThreads * this.weakenRam;
+        }
+
+        // return true if this cycle will fully weaken the target
+        return this.weakenThreads * this.weakenAmountPerThread >= secDiff;
+    }
+
+    /** @param {import(".").NS } ns */
+    updateForWG(ns, useAllRam = false) {
+        // Target Info
+        this.targetMoneyAvailable = ns.getServerMoneyAvailable(this.targetname);
+        this.targetSec = ns.getServerSecurityLevel(this.targetname);
+        this.targetSecMin = ns.getServerMinSecurityLevel(this.targetname);
+        let secDiff = this.targetSec - this.targetSecMin;
+
+        // Grow Info
+        this.growTime = ns.getGrowTime(this.targetname);
+        this.growMult = this.highMoney / this.targetMoneyAvailable;
+        this.growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
+        let growThreadsFull = this.growThreads;
+        if (useAllRam) this.growThreads = Math.floor(this.ramAllowance / this.growRam);
+        this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
+
+        // Weaken Info
+        this.weakenTime = ns.getWeakenTime(this.targetname);
+        this.weakenAmountPerThread = ns.weakenAnalyze(1, this.cores);
+        this.weakenThreadsGrow = Math.ceil((this.growSecIncrease + secDiff) / this.weakenAmountPerThread);
+
+        this.ramPerCycle = this.growThreads * this.growRam + this.weakenThreadsGrow * this.weakenRam;
+
+        while (this.ramPerCycle > this.ramAllowance) {
+            this.growThreads--;
+            this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
+            this.weakenThreadsGrow = Math.ceil((this.growSecIncrease + secDiff) / this.weakenAmountPerThread);
+            this.ramPerCycle = this.growThreads * this.growRam + this.weakenThreadsGrow * this.weakenRam;
+        }
+
+        // Returning true if this grow cycle will max out the target server
+        return this.growThreads >= growThreadsFull;
+    }
+
+    /** @param {import(".").NS } ns */
+    updateForHW(ns, useAllRam = false) {
+        // Target Info
+        this.targetMoneyAvailable = ns.getServerMoneyAvailable(this.targetname);
+        this.targetSec = ns.getServerSecurityLevel(this.targetname);
+        this.targetSecMin = ns.getServerMinSecurityLevel(this.targetname);
+        let secDiff = this.targetSec - this.targetSecMin;
+
+        // Hack Info
+        this.hackTime = ns.getHackTime(this.targetname);
+        this.hackPercentPerThread = ns.hackAnalyze(this.targetname);
+        this.hackTotalEst = this.targetMoneyAvailable - this.lowMoney;
+        this.hackThreads = Math.ceil(ns.hackAnalyzeThreads(this.targetname, this.hackTotalEst));
+        let hackThreadsFull = this.hackThreads;
+        if (useAllRam) this.hackThreads = Math.floor(this.ramAllowance / this.hackRam);
+        this.hackTotal = hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
+        this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
+
+        // Weaken Info
+        this.weakenTime = ns.getWeakenTime(this.targetname);
+        this.weakenAmountPerThread = ns.weakenAnalyze(1, this.cores);
+        this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
+
+        this.ramPerCycle = this.hackThreads * this.hackRam + this.weakenThreadsHack * this.weakenRam;
+
+        while (this.ramPerCycle > this.ramAllowance) {
+            this.hackThreads--;
+            this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
+            this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
+            this.ramPerCycle = this.hackThreads * this.hackRam + this.weakenThreadsHack * this.weakenRam;
+        }
+
+        // Returning true if this hack cycle will bottom out the target server
+        return this.hackThreads >= hackThreadsFull;
+    }
+
+    /** @param {import(".").NS } ns */
+    updateForHGW(ns, useAllRam = false) {
+        // Target Info
+        this.targetMoneyAvailable = ns.getServerMoneyAvailable(this.targetname);
+        this.targetSec = ns.getServerSecurityLevel(this.targetname);
+        this.targetSecMin = ns.getServerMinSecurityLevel(this.targetname);
+        let secDiff = this.targetSec - this.targetSecMin;
+
+        // Hack Info
+        this.hackTime = ns.getHackTime(this.targetname);
+        this.hackPercentPerThread = ns.hackAnalyze(this.targetname);
+        this.hackTotalEst = this.targetMoneyAvailable - this.lowMoney;
+        this.hackThreads = Math.ceil(ns.hackAnalyzeThreads(this.targetname, this.hackTotalEst));
+        let hackThreadsFull = this.hackThreads;
+        if (useAllRam) this.hackThreads = Math.floor(this.ramAllowance / this.hackRam);
+        this.hackTotal = hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
+        this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
+
+        // Grow Info
+        this.growTime = ns.getGrowTime(this.targetname);
+        this.growMult = this.highMoney / (this.targetMoneyAvailable - this.hackTotal);
+        this.growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
+        this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
+
+        // Weaken Info
+        this.weakenTime = ns.getWeakenTime(this.targetname);
+        this.weakenAmountPerThread = ns.weakenAnalyze(1, this.cores);
+        this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
+        this.weakenThreadsGrow = Math.ceil(this.growSecIncrease / this.weakenAmountPerThread);
+
+        this.ramPerCycle =
+            this.hackThreads * this.hackRam +
+            this.growThreads * this.growRam +
+            this.weakenThreadsHack * this.weakenRam +
+            this.weakenThreadsGrow * this.weakenRam;
+
+        while (this.ramPerCycle > this.ramAllowance) {
+            this.hackThreads--;
+            this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
+            this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
+            this.growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
+            this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
+            this.weakenThreadsGrow = Math.ceil(this.growSecIncrease / this.weakenAmountPerThread);
+
+            this.ramPerCycle =
+                this.hackThreads * this.hackRam +
+                this.growThreads * this.growRam +
+                this.weakenThreadsHack * this.weakenRam +
+                this.weakenThreadsGrow * this.weakenRam;
+        }
+
+        return this.hackThreads >= hackThreadsFull;
+    }
+}
+
+//** @param {NS} ns **/
+/** @param {import(".").NS } ns */
+export async function main(ns) {
+    if (!ns.args[0]) {
+        ns.tprintf("ERROR: No target server defined");
+        return;
+    }
+
+    let env = new HackEnv(ns, ns.args[0], ns.getHostname(), ns.args[1]);
+    await env.prep(ns);
+
+    env.printRamOverride(ns);
+
+    return;
+
+    if (debug) ns.tprintf("INFO: Availble host RAM %.2f", ramAllowance);
+
+    // Weaken to minimum security
+    target = ns.getServer(target.hostname);
+    while (target.hackDifficulty > target.minDifficulty) {
+        doWeaken(ns, host.hostname, target.hostname, ramAllowance);
+        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
+
+        if (debug) {
+            let oldHackDifficulty = target.hackDifficulty;
+            target = ns.getServer(target.hostname);
+            ns.tprintf("  Lowered Security from %.2f to %.2f", oldHackDifficulty, target.hackDifficulty);
+        } else {
+            target = ns.getServer(target.hostname);
+        }
+    }
+
+    // Grow to high threshold money
+    target = ns.getServer(target.hostname);
+    while (target.moneyAvailable < highMoney) {
+        doGrowAndWeaken(ns, host.hostname, target.hostname, ramAllowance, highMoney);
+        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
+
+        if (debug) {
+            let oldMoney = target.moneyAvailable;
+            target = ns.getServer(target.hostname);
+            ns.tprintf(
+                "  Increased %s available money from %s to %s (%.2f%% of Max); Current Security: %.2f (min: %.2f)",
+                target.hostname,
+                ns.nFormat(oldMoney, "($0.000a)"),
+                ns.nFormat(target.moneyAvailable, "($0.000a)"),
+                (target.moneyAvailable / target.moneyMax) * 100,
+                target.hackDifficulty,
+                target.minDifficulty
+            );
+        } else {
+            target = ns.getServer(target.hostname);
+        }
+    }
+
+    // Hack the world
+    let tspacer = 200;
+    let tCycleSpacer = tspacer * 4;
+    let tweaken = ns.getWeakenTime(target.hostname);
+    let tweakenFullCycle = tweaken + tspacer * 3;
+    let hgwCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads;
+    [hgwCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads] = calcHGWThreadsSmart(
+        ns,
+        host.hostname,
+        target.hostname,
+        ramAllowance,
+        tspacer
+    );
+    while (true) {
+        for (let i = 0; i < hgwCycles; i++) {
+            if (i !== 0) await ns.sleep(tCycleSpacer);
+            launchHGW(
+                ns,
+                host.hostname,
+                target.hostname,
+                tspacer,
+                i,
+                hackWeakenThreads,
+                growWeakenThreads,
+                hackThreads,
+                growThreads
+            );
+        }
+
+        let sleepTimer = tweakenFullCycle - hgwCycles * tCycleSpacer + tCycleSpacer;
+        if (sleepTimer > 0) await ns.sleep(sleepTimer);
+    }
+}

@@ -69,12 +69,18 @@ function calcMinGrowThreads(ns, host, _target, hackAmount) {
     if (hackAmount < 1) targetGrowMult = target.moneyMax / (target.moneyMax * hackAmount);
     else targetGrowMult = target.moneyMax / (target.moneyMax - hackAmount);
 
+    if (targetGrowMult < 1)
+        return 1
+
     let growThreads = Math.ceil(ns.growthAnalyze(target.hostname, targetGrowMult, host.cpuCores));
     while (ns.formulas.hacking.growPercent(target, --growThreads, player, host.cpuCores) > targetGrowMult);
 
     return growThreads + 1;
 }
 
+
+// TODO: Update this to calculate dynamically based on current income or something. If current income is low, value quicker return over
+// long term effectiveness. Current implementation does not take into effect batched processing or time for initial weaken/grow cycles
 /** @param {import(".").NS } ns */
 function calcHackRate(ns, host, _target, ramAllowance) {
     let target = _target;
@@ -247,8 +253,6 @@ export async function main(ns) {
         for (let target of finalTargets) {
             if (target.size === bucket) targetnames.push(target.targetname);
         }
-
-        //ns.tprintf("%s: [%s] [%s]", bucket, targetnames, hostnames)
 
         // iterate over all hosts in this bucket, killing processes on any that are attacking something not in targets and
         // removing targets from the target array that are already being attacked

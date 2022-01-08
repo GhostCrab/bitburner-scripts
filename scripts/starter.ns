@@ -1,12 +1,7 @@
-/** @type import(".").NS */
-let ns = null;
-
 import { allHosts, canExecuteOnServer, serverIsHackable, serverMaxMoneySortDesc, setns, softenServer } from "./util.ns";
 
-/** @param {NS} _ns **/
-export async function main(_ns) {
-    ns = _ns;
-
+/** @type import(".").NS */
+export async function main(ns) {
     setns(ns);
 
     let hostnames = allHosts();
@@ -20,7 +15,7 @@ export async function main(_ns) {
         .sort(serverMaxMoneySortDesc);
     let rootHostsNoPurchased = hostnames
         .filter(canExecuteOnServer)
-        .filter((hostname) => hostname.indexOf("pserv") !== -1 && hostname !== "home");
+        .filter((hostname) => (hostname.indexOf("pserv") === -1 && hostname !== "home"));
     let hackMeRam = ns.getScriptRam("hack_me.ns", "home");
 
     let roundRobin = 0;
