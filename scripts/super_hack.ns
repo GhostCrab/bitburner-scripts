@@ -1,8 +1,20 @@
-var debug = true;
+const debug = false;
+const TSPACER = 200;
+const WEAKENNS = "weaken.ns";
+const GROWNS = "grow.ns";
+const HACKNS = "hack.ns";
+
+const HackState = {
+    UNSET: "UNDEFINED STATE",
+    W: "Weaken",
+    GW: "Grow and Weaken",
+    HW: "Hack and Weaken",
+    HGW: "Hack, Grow and Weaken",
+};
 
 class HackEnv {
     /** @param {import(".").NS } ns */
-    constructor(ns, targetname, hostname = "", ramAllowance = -1, highMoney = -1, lowMoney = -1, tspacer = 200) {
+    constructor(ns, targetname, hostname = "", ramAllowance = -1, highMoney = -1, lowMoney = -1, tspacer = TSPACER) {
         this.targetname = targetname;
         this.hostname = hostname === "" ? ns.getHostname() : hostname;
         this.ramAllowance =
@@ -25,6 +37,7 @@ class HackEnv {
 
         // Weaken Info
         this.weakenRam = 1.75; // CONST
+        this.weakenStartSec = 0;
         this.weakenAmountPerThread = 0;
         this.weakenThreads = 0;
         this.weakenThreadsGrow = 0;
@@ -34,6 +47,7 @@ class HackEnv {
 
         // Grow Info
         this.growRam = 1.75; // CONST
+        this.growStartMoney = 0;
         this.growMult = 0;
         this.growThreads = 0;
         this.growSecIncrease = 0;
@@ -41,6 +55,7 @@ class HackEnv {
 
         // Hack Info
         this.hackRam = 1.7; // CONST
+        this.hackStartMoney = 0;
         this.hackTotalEst = 0;
         this.hackTotal = 0;
         this.hackTotalStep = 0;
@@ -54,12 +69,121 @@ class HackEnv {
         this.cycleSpacer = tspacer * 4;
         this.cycleTarget = 0;
         this.cycleTotal = 0;
+
+        // State Info
+        this.state = HackState.UNSET;
     }
 
     async prep(ns) {
-        if (!ns.fileExists("grow.ns", this.hostname)) await ns.scp("grow.ns", "home", this.hostname);
-        if (!ns.fileExists("weaken.ns", this.hostname)) await ns.scp("weaken.ns", "home", this.hostname);
-        if (!ns.fileExists("hack.ns", this.hostname)) await ns.scp("hack.ns", "home", this.hostname);
+        if (!ns.fileExists(GROWNS, this.hostname)) await ns.scp(GROWNS, "home", this.hostname);
+        if (!ns.fileExists(WEAKENNS, this.hostname)) await ns.scp(WEAKENNS, "home", this.hostname);
+        if (!ns.fileExists(HACKNS, this.hostname)) await ns.scp(HACKNS, "home", this.hostname);
+    }
+
+    /** @param {import(".").NS } ns */
+    setState(ns) {
+        if (this.isWRunning(ns)) {
+            // Process is running on this target, dont update the state
+            return;
+        }
+
+        if (!this.doneWeaken(ns)) {
+            this.state = HackState.W;
+            this.weakenStartSec = ns.getServerSecurityLevel(this.targetname);
+        } else if (!this.doneGrow(ns)) {
+            this.state = HackState.GW;
+            this.growStartMoney = ns.getServerMoneyAvailable(this.targetname);
+        } else if (this.updateForHGW(ns) || this.hackTotal > this.targetMoneyAvailable * 0.5) {
+            // Figure out if the host can support a substantial HGW (defined by a full hack HGW cycle,
+            // or the HGW Cycle is hacking at least 50% of the available money). If not, set state to HW
+            this.state = HackState.HGW;
+            this.hackStartMoney = ns.getServerMoneyAvailable(this.targetname);
+        } else {
+            this.state = HackState.HW;
+            this.hackStartMoney = ns.getServerMoneyAvailable(this.targetname);
+        }
+    }
+    /** @param {import(".").NS } ns */
+    refresh(ns) {
+        if (this.isWRunning(ns)) {
+            // process in progress, wait for next refresh to update
+            return;
+        }
+
+        if (debug) {
+            switch (this.state) {
+                case HackState.W:
+                    ns.tprintf(
+                        "WEAKEN: %s:%s => Lowered Security from %.2f to %.2f (min: %.2f)",
+                        this.hostname,
+                        this.targetname,
+                        this.weakenStartSec,
+                        ns.getServerSecurityLevel(this.targetname),
+                        ns.getServerMinSecurityLevel(this.targetname)
+                    );
+                    break;
+                case HackState.GW:
+                    ns.tprintf(
+                        "GROW-WEAKEN: %s:%s => Increased available money from %s to %s/%s [Sec: %.2f]",
+                        this.hostname,
+                        this.targetname,
+                        ns.nFormat(this.growStartMoney, "($0.000a)"),
+                        ns.nFormat(ns.getServerMoneyAvailable(this.targetname), "($0.000a)"),
+                        ns.nFormat(this.highMoney, "($0.000a)"),
+                        ns.getServerSecurityLevel(this.targetname)
+                    );
+                    break;
+                case HackState.HW:
+                    let totalHack = this.hackStartMoney - ns.getServerMoneyAvailable(this.targetname);
+                    ns.tprintf(
+                        "HACK-WEAKEN: %s:%s => Decreased available money from %s to %s; %s Total (%.2f%% of max) [Sec: %.2f]",
+                        this.hostname,
+                        this.targetname,
+                        ns.nFormat(this.hackStartMoney, "($0.000a)"),
+                        ns.nFormat(ns.getServerMoneyAvailable(this.targetname), "($0.000a)"),
+                        ns.nFormat(totalHack, "($0.000a)"),
+                        (totalHack / ns.getServerMaxMoney(this.targetname)) * 100,
+                        ns.getServerSecurityLevel(this.targetname)
+                    );
+                    break;
+                case HackState.HGW:
+                    ns.tprintf(
+                        "HACK-GROW-WEAKEN: %s:%s => Cycle Complete; %s Available; Hacked %s (%.2f%% of max) [Sec: %.2f]",
+                        this.hostname,
+                        this.targetname,
+                        ns.nFormat(ns.getServerMoneyAvailable(this.targetname), "($0.000a)"),
+                        ns.nFormat(this.hackTotal, "($0.000a)"),
+                        (this.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
+                        ns.getServerSecurityLevel(this.targetname)
+                    );
+                    break;
+                default:
+                    // Do Nothing
+                    break;
+            }
+        }
+
+        this.setState(ns);
+        switch (this.state) {
+            case HackState.W:
+                this.updateForW(ns);
+                this.execW(ns);
+                break;
+            case HackState.GW:
+                this.updateForGW(ns);
+                this.execGW(ns);
+                break;
+            case HackState.HW:
+                this.updateForHW(ns);
+                this.execHW(ns);
+                break;
+            case HackState.HGW:
+                this.updateForHGW(ns);
+                this.execHGW(ns);
+                break;
+            default:
+            // Do Nothing
+        }
     }
 
     printRamOverride(ns) {
@@ -73,8 +197,16 @@ class HackEnv {
         );
     }
 
+    doneWeaken(ns) {
+        return ns.getServerSecurityLevel(this.targetname) === ns.getServerMinSecurityLevel(this.targetname);
+    }
+
+    doneGrow(ns) {
+        return ns.getServerMoneyAvailable(this.targetname) >= this.highMoney;
+    }
+
     /** @param {import(".").NS } ns */
-    updateForW(ns, useAllRam = false) {
+    updateForW(ns, useAllRam = true) {
         // Target Info
         this.targetSec = ns.getServerSecurityLevel(this.targetname);
         this.targetSecMin = ns.getServerMinSecurityLevel(this.targetname);
@@ -97,9 +229,9 @@ class HackEnv {
     }
 
     /** @param {import(".").NS } ns */
-    updateForWG(ns, useAllRam = false) {
+    updateForGW(ns, useAllRam = true) {
         // Target Info
-        this.targetMoneyAvailable = ns.getServerMoneyAvailable(this.targetname);
+        this.targetMoneyAvailable = Math.max(ns.getServerMoneyAvailable(this.targetname), 1.0);
         this.targetSec = ns.getServerSecurityLevel(this.targetname);
         this.targetSecMin = ns.getServerMinSecurityLevel(this.targetname);
         let secDiff = this.targetSec - this.targetSecMin;
@@ -131,7 +263,16 @@ class HackEnv {
     }
 
     /** @param {import(".").NS } ns */
-    updateForHW(ns, useAllRam = false) {
+    updateForHW(ns) {
+        // Find out how much money I can gain back in a single GW cycle and never hack more than that
+        this.updateForGW(ns, true); // to set this.growThreads
+        this.growMult = ns.formulas.hacking.growPercent(
+            ns.getServer(this.targetname),
+            this.growThreads,
+            ns.getPlayer(),
+            this.cores
+        );
+
         // Target Info
         this.targetMoneyAvailable = ns.getServerMoneyAvailable(this.targetname);
         this.targetSec = ns.getServerSecurityLevel(this.targetname);
@@ -144,9 +285,12 @@ class HackEnv {
         this.hackTotalEst = this.targetMoneyAvailable - this.lowMoney;
         this.hackThreads = Math.ceil(ns.hackAnalyzeThreads(this.targetname, this.hackTotalEst));
         let hackThreadsFull = this.hackThreads;
-        if (useAllRam) this.hackThreads = Math.floor(this.ramAllowance / this.hackRam);
-        this.hackTotal = hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
+        this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
         this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
+
+        // Single Cycle Grow Info
+        let amountLeftAfterHack = this.targetMoneyAvailable - this.hackTotal;
+        let singleCyleGrowAmount = Math.min(amountLeftAfterHack * this.growMult, ns.getServerMaxMoney(this.targetname));
 
         // Weaken Info
         this.weakenTime = ns.getWeakenTime(this.targetname);
@@ -155,9 +299,13 @@ class HackEnv {
 
         this.ramPerCycle = this.hackThreads * this.hackRam + this.weakenThreadsHack * this.weakenRam;
 
-        while (this.ramPerCycle > this.ramAllowance) {
+        while (this.ramPerCycle > this.ramAllowance || singleCyleGrowAmount < this.highMoney) {
             this.hackThreads--;
+            this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
             this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
+            amountLeftAfterHack = this.targetMoneyAvailable - this.hackTotal;
+            singleCyleGrowAmount = Math.min(amountLeftAfterHack * this.growMult, ns.getServerMaxMoney(this.targetname));
+
             this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
             this.ramPerCycle = this.hackThreads * this.hackRam + this.weakenThreadsHack * this.weakenRam;
         }
@@ -167,7 +315,7 @@ class HackEnv {
     }
 
     /** @param {import(".").NS } ns */
-    updateForHGW(ns, useAllRam = false) {
+    updateForHGW(ns, useAllRam = true) {
         // Target Info
         this.targetMoneyAvailable = ns.getServerMoneyAvailable(this.targetname);
         this.targetSec = ns.getServerSecurityLevel(this.targetname);
@@ -181,7 +329,11 @@ class HackEnv {
         this.hackThreads = Math.ceil(ns.hackAnalyzeThreads(this.targetname, this.hackTotalEst));
         let hackThreadsFull = this.hackThreads;
         if (useAllRam) this.hackThreads = Math.floor(this.ramAllowance / this.hackRam);
-        this.hackTotal = hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
+        this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
+        if (this.hackTotal >= this.targetMoneyAvailable) {
+            this.hackThreads = 1 / this.hackPercentPerThread - 1;
+            this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
+        }
         this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
 
         // Grow Info
@@ -204,8 +356,10 @@ class HackEnv {
 
         while (this.ramPerCycle > this.ramAllowance) {
             this.hackThreads--;
+            this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
             this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
             this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
+            this.growMult = this.highMoney / (this.targetMoneyAvailable - this.hackTotal);
             this.growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
             this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
             this.weakenThreadsGrow = Math.ceil(this.growSecIncrease / this.weakenAmountPerThread);
@@ -219,6 +373,57 @@ class HackEnv {
 
         return this.hackThreads >= hackThreadsFull;
     }
+
+    /** @param {import(".").NS } ns */
+    execW(ns) {
+        ns.exec(WEAKENNS, this.hostname, this.weakenThreads, this.targetname);
+    }
+
+    /** @param {import(".").NS } ns */
+    execGW(ns) {
+        // start grow such that it finishes slightly before weaken
+        let growOffsetTime = this.weakenTime - this.tspacer - this.growTime;
+        ns.exec(GROWNS, this.hostname, this.growThreads, this.targetname, growOffsetTime);
+        ns.exec(WEAKENNS, this.hostname, this.weakenThreadsGrow, this.targetname);
+    }
+
+    /** @param {import(".").NS } ns */
+    execHW(ns) {
+        // start hack such that it finishes slightly before weaken
+        let hackOffsetTime = this.weakenTime - this.tspacer - this.hackTime;
+        ns.exec(HACKNS, this.hostname, this.hackThreads, this.targetname, hackOffsetTime);
+        ns.exec(WEAKENNS, this.hostname, this.weakenThreadsHack, this.targetname);
+    }
+
+    /** @param {import(".").NS } ns */
+    execHGW(ns) {
+        let weakenGrowOffsetTime = this.tspacer * 2;
+        let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
+        let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
+
+        ns.exec(WEAKENNS, this.hostname, this.weakenThreadsHack, this.targetname, 0); // hack weaken, Start 1st (0ms offset), finish 2nd
+        ns.exec(WEAKENNS, this.hostname, this.weakenThreadsGrow, this.targetname, weakenGrowOffsetTime); // grow weaken, Start 2nd, finish 4th
+        ns.exec(GROWNS, this.hostname, this.growThreads, this.targetname, growOffsetTime); // Start 3rd, finish 3rd
+        ns.exec(HACKNS, this.hostname, this.hackThreads, this.targetname, hackOffsetTime); // Start 4th, finish 1st
+    }
+
+    /** @param {import(".").NS } ns */
+    isWRunning(ns) {
+        let ps = ns.ps(this.hostname);
+        for (let psInfo of ps) {
+            if (psInfo.filename === WEAKENNS && psInfo.args.includes(this.targetname)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @param {import(".").NS } ns */
+    async waitW(ns) {
+        while (this.isWRunning(ns)) {
+            await ns.sleep(this.tspacer);
+        }
+    }
 }
 
 //** @param {NS} ns **/
@@ -229,83 +434,14 @@ export async function main(ns) {
         return;
     }
 
-    let env = new HackEnv(ns, ns.args[0], ns.getHostname(), ns.args[1]);
+    let env = new HackEnv(ns, ns.args[0], ns.args[2], ns.args[1]);
     await env.prep(ns);
 
-    env.printRamOverride(ns);
+    if (debug) env.printRamOverride(ns);
+    if (debug) ns.tprintf("INFO: Availble host RAM %.2f", env.ramAllowance);
 
-    return;
-
-    if (debug) ns.tprintf("INFO: Availble host RAM %.2f", ramAllowance);
-
-    // Weaken to minimum security
-    target = ns.getServer(target.hostname);
-    while (target.hackDifficulty > target.minDifficulty) {
-        doWeaken(ns, host.hostname, target.hostname, ramAllowance);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
-
-        if (debug) {
-            let oldHackDifficulty = target.hackDifficulty;
-            target = ns.getServer(target.hostname);
-            ns.tprintf("  Lowered Security from %.2f to %.2f", oldHackDifficulty, target.hackDifficulty);
-        } else {
-            target = ns.getServer(target.hostname);
-        }
-    }
-
-    // Grow to high threshold money
-    target = ns.getServer(target.hostname);
-    while (target.moneyAvailable < highMoney) {
-        doGrowAndWeaken(ns, host.hostname, target.hostname, ramAllowance, highMoney);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
-
-        if (debug) {
-            let oldMoney = target.moneyAvailable;
-            target = ns.getServer(target.hostname);
-            ns.tprintf(
-                "  Increased %s available money from %s to %s (%.2f%% of Max); Current Security: %.2f (min: %.2f)",
-                target.hostname,
-                ns.nFormat(oldMoney, "($0.000a)"),
-                ns.nFormat(target.moneyAvailable, "($0.000a)"),
-                (target.moneyAvailable / target.moneyMax) * 100,
-                target.hackDifficulty,
-                target.minDifficulty
-            );
-        } else {
-            target = ns.getServer(target.hostname);
-        }
-    }
-
-    // Hack the world
-    let tspacer = 200;
-    let tCycleSpacer = tspacer * 4;
-    let tweaken = ns.getWeakenTime(target.hostname);
-    let tweakenFullCycle = tweaken + tspacer * 3;
-    let hgwCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads;
-    [hgwCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads] = calcHGWThreadsSmart(
-        ns,
-        host.hostname,
-        target.hostname,
-        ramAllowance,
-        tspacer
-    );
     while (true) {
-        for (let i = 0; i < hgwCycles; i++) {
-            if (i !== 0) await ns.sleep(tCycleSpacer);
-            launchHGW(
-                ns,
-                host.hostname,
-                target.hostname,
-                tspacer,
-                i,
-                hackWeakenThreads,
-                growWeakenThreads,
-                hackThreads,
-                growThreads
-            );
-        }
-
-        let sleepTimer = tweakenFullCycle - hgwCycles * tCycleSpacer + tCycleSpacer;
-        if (sleepTimer > 0) await ns.sleep(sleepTimer);
+        env.refresh(ns);
+        await ns.sleep(TSPACER);
     }
 }

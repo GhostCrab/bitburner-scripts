@@ -170,7 +170,7 @@ export async function main(ns) {
 
     let player = ns.getPlayer();
     let allHostnames = allHosts();
-    let attackScript = "dispatcher.ns";
+    let attackScript = "super_hack.ns";
 
     doProgramBuys();
 
@@ -182,7 +182,7 @@ export async function main(ns) {
 
     // create a dictionary mapping server size to server name array (with a special bucket for "home")
     let hostSizeDict = {};
-    for (let hostname of allHostnames.filter(canExecuteOnServer)) {
+    for (let hostname of allHostnames.filter(canExecuteOnServer).filter((hostname) => ns.getServerMaxRam(hostname) >= 32)) {
         let key = ns.getServerMaxRam(hostname);
 
         if (hostname === "home") key = "home";
