@@ -1,9 +1,7 @@
 /** @type import(".").NS */
-let ns = null;
-
 import { setns, mapHosts, doProgramBuys } from "./util.ns";
 
-function printAugStats(stats) {
+function printAugStats(ns, stats) {
     if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult);
     if (stats.agility_mult) ns.tprintf("    %31s: %.2f", "agility_mult", stats.agility_mult);
     if (stats.bladeburner_analysis_mult)
@@ -45,37 +43,21 @@ function printAugStats(stats) {
     if (stats.work_money_mult) ns.tprintf("    %31s: %.2f", "work_money_mult", stats.work_money_mult);
 }
 
-function augHackUseful(aug) {
-    let stats = aug.stats;
-    if (stats.company_rep_mult) return true;
-    if (stats.faction_rep_mult) return true;
-    if (stats.hacking_chance_mult) return true;
-    if (stats.hacking_exp_mult) return true;
-    if (stats.hacking_grow_mult) return true;
-    if (stats.hacking_money_mult) return true;
-    if (stats.hacking_mult) return true;
-    if (stats.hacking_speed_mult) return true;
-    if (aug.name === "BitRunners Neurolink" || aug.name === "CashRoot Starter Kit" || aug.name === "PCMatrix")
-        return true;
-
-    return false;
-}
-
 class Augmentation {
-    constructor(name) {
+    constructor(ns, name, faction) {
         let ownedAugs = ns.getOwnedAugmentations(true);
         let installedAugs = ns.getOwnedAugmentations();
-        this.ns = ns;
         this.name = name;
+        this.faction = faction;
         this.price = ns.getAugmentationPrice(this.name);
         this.rep = ns.getAugmentationRepReq(this.name);
         this.prereq = ns.getAugmentationPrereq(this.name);
         this.stats = ns.getAugmentationStats(this.name);
-        this.hackUseful = augHackUseful(this);
         this.owned = ownedAugs.includes(this.name);
         this.installed = installedAugs.includes(this.name);
-        let installedStr = this.installed ? "INSTALLED" : this.owned ? "OWNED" : "";
-        this.str = `${this.name} - ${ns.nFormat(this.price, "$0.000a")} [${ns.nFormat(
+        this.purchaseable = ns.getFactionRep(faction) >=  this.rep
+        let installedStr = this.installed ? "INSTALLED" : this.owned ? "OWNED" : this.purchaseable? "PURCHASEABLE" : "";
+        this.str = `${this.faction}: ${this.name} - ${ns.nFormat(this.price, "$0.000a")} [${ns.nFormat(
             this.rep,
             "0.000a"
         )}] ${installedStr}`;
@@ -84,9 +66,24 @@ class Augmentation {
     toString() {
         return this.str;
     }
+
+    isHackUseful() {
+        if (this.stats.company_rep_mult) return true;
+        if (this.stats.faction_rep_mult) return true;
+        if (this.stats.hacking_chance_mult) return true;
+        if (this.stats.hacking_exp_mult) return true;
+        if (this.stats.hacking_grow_mult) return true;
+        if (this.stats.hacking_money_mult) return true;
+        if (this.stats.hacking_mult) return true;
+        if (this.stats.hacking_speed_mult) return true;
+        if (this.name === "BitRunners Neurolink" || this.name === "CashRoot Starter Kit" || this.name === "PCMatrix")
+            return true;
+    
+        return false;
+    }
 }
 
-async function doBackdoors() {
+async function doBackdoors(ns) {
     const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a", "ecorp"];
     let hosts = mapHosts();
 
@@ -110,13 +107,11 @@ async function doBackdoors() {
 }
 
 /** @param {NS} _ns **/
-export async function main(_ns) {
-    ns = _ns;
-
+export async function main(ns) {
     setns(ns);
 
     doProgramBuys();
-    await doBackdoors();
+    await doBackdoors(ns);
 
     let player = ns.getPlayer();
     let incomePerSec = player.money / (player.playtimeSinceLastAug / 1000);
@@ -159,26 +154,38 @@ export async function main(_ns) {
         // "Church of the Machine God",
     ];
 
-    //for (let faction of player.factions) {
+    let sortedFactions = player.factions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a))
+
+    let allPurchaseableAugs = []
+    //for (let faction of sortedFactions) {
     for (let faction of allFactions) {
         let augs = ns
             .getAugmentationsFromFaction(faction)
             .map((name) => {
-                return new Augmentation(name);
+                return new Augmentation(ns, name, faction);
             })
             .sort((a, b) => a.rep - b.rep);
         let augsToBuy = [];
         for (let aug of augs) {
-            if (!aug.hackUseful || aug.owned) continue;
-            augsToBuy.push(aug);
+            if (aug.isHackUseful() && !aug.owned) {
+                augsToBuy.push(aug);
+            }
+            if (aug.isHackUseful() && aug.purchaseable && !aug.owned && !aug.installed) {
+                allPurchaseableAugs.push(aug)
+            }            
         }
 
-        if (augsToBuy.length) {
-            ns.tprintf("%s:", faction);
-            for (let aug of augsToBuy) {
-                ns.tprintf("  %s", aug);
-                // printAugStats(aug.stats);
-            }
+        ns.tprintf("%s (rep: %d):", faction, ns.getFactionRep(faction));
+        for (let aug of augsToBuy) {
+            ns.tprintf("  %s", aug);
+            // printAugStats(aug.stats);
         }
+    }
+
+    allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price)
+
+    for (let aug of allPurchaseableAugs) {
+        //ns.purchaseAugmentation(aug.faction, aug.name)
+        ns.tprintf("%s", aug);
     }
 }

@@ -1,100 +1,15 @@
 import { allHosts, serverIsHackable, setns, softenServer, doProgramBuys, canExecuteOnServer } from "./util.ns";
+import { HackEnv, TSPACER } from "./hack_env.js";
 
 /** @param {import(".").NS } ns */
-function calcHackAmount(ns, host, _target, ramAllowance) {
-    let player = ns.getPlayer();
-    let target = ns.getServer(_target.hostname);
-    target.hackDifficulty = target.minDifficulty;
+function calcHackRate(ns, hostname, targetname, ramAllowance, simMinutes = 2) {
+    let env = new HackEnv(ns, targetname, hostname, ramAllowance);
+    env.simEnabled = true;
 
-    let growRam = ns.getScriptRam("grow.ns"); // 1.75GB
-    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
-    let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
+    // simulate for 10 minutes
+    env.fastSim(ns, 1000 * 60 * simMinutes);
 
-    let targetHackAmount = target.moneyMax * 0.99;
-    let targetHackPercent = targetHackAmount / target.moneyMax;
-    let hackPercent = ns.formulas.hacking.hackPercent(target, player);
-    let hackThreads = Math.ceil(targetHackPercent / hackPercent);
-    let hackAmount = hackThreads * hackPercent * target.moneyMax;
-
-    let growThreads = calcMinGrowThreads(ns, host, target, hackAmount);
-
-    let weakenAmountPerThread = ns.weakenAnalyze(1, host.cpuCores);
-
-    let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
-    let growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
-    let hackWeakenThreads = Math.ceil(hackSecIncrease / weakenAmountPerThread);
-    let growWeakenThreads = Math.ceil(growSecIncrease / weakenAmountPerThread);
-    let hackRamCycle =
-        hackThreads * hackRam + growThreads * growRam + (hackWeakenThreads + growWeakenThreads) * weakenRam;
-
-    if (hackRamCycle > ramAllowance) {
-        let failRatio = ramAllowance / hackRamCycle;
-        targetHackAmount = Math.min(targetHackAmount * (failRatio * 1.1), targetHackAmount);
-        targetHackPercent = targetHackAmount / target.moneyMax;
-        hackThreads = Math.ceil(targetHackPercent / hackPercent);
-    }
-
-    while (hackRamCycle > ramAllowance) {
-        hackThreads--;
-        if (hackThreads === 0) return 0;
-
-        hackAmount = hackThreads * hackPercent * target.moneyMax;
-
-        growThreads = calcMinGrowThreads(ns, host, target, hackAmount);
-
-        hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
-        growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
-        hackWeakenThreads = Math.ceil(hackSecIncrease / weakenAmountPerThread);
-        growWeakenThreads = Math.ceil(growSecIncrease / weakenAmountPerThread);
-        hackRamCycle =
-            hackThreads * hackRam + growThreads * growRam + (hackWeakenThreads + growWeakenThreads) * weakenRam;
-    }
-
-    // ns.tprintf("  H: %d/%.2fGB; G: %d/%.2fGB; W: %d|%d/%.2fGB; T: %.2fGB (%s, %.2f%% of Max)",
-    //     hackThreads, hackThreads * hackRam,
-    //     growThreads, growThreads * growRam,
-    //     hackWeakenThreads, growWeakenThreads, (hackWeakenThreads + growWeakenThreads) * weakenRam,
-    //     hackRamCycle, ns.nFormat(hackAmount, "($0.000a)"), hackAmount / target.moneyMax * 100)
-
-    return hackAmount * ns.formulas.hacking.hackChance(target, player);
-}
-
-/** @param {import(".").NS } ns */
-function calcMinGrowThreads(ns, host, _target, hackAmount) {
-    let player = ns.getPlayer();
-    let target = ns.getServer(_target.hostname);
-    target.hackDifficulty = target.minDifficulty;
-
-    let targetGrowMult = 1;
-    if (hackAmount < 1) targetGrowMult = target.moneyMax / (target.moneyMax * hackAmount);
-    else targetGrowMult = target.moneyMax / (target.moneyMax - hackAmount);
-
-    if (targetGrowMult < 1)
-        return 1
-
-    let growThreads = Math.ceil(ns.growthAnalyze(target.hostname, targetGrowMult, host.cpuCores));
-    while (ns.formulas.hacking.growPercent(target, --growThreads, player, host.cpuCores) > targetGrowMult);
-
-    return growThreads + 1;
-}
-
-
-// TODO: Update this to calculate dynamically based on current income or something. If current income is low, value quicker return over
-// long term effectiveness. Current implementation does not take into effect batched processing or time for initial weaken/grow cycles
-/** @param {import(".").NS } ns */
-function calcHackRate(ns, host, _target, ramAllowance) {
-    let target = _target;
-    let player = ns.getPlayer();
-    if (typeof target === "string" || target instanceof String) target = ns.getServer(target);
-
-    if (target.moneyMax <= 0) return 0;
-
-    target.hackDifficulty = target.minDifficulty;
-
-    let tweaken = ns.formulas.hacking.weakenTime(target, player) / 1000;
-    let hackAmount = calcHackAmount(ns, host, target, ramAllowance);
-
-    return hackAmount / tweaken;
+    return env.simIncome / (env.simTime / 1000);
 }
 
 /** @param {import(".").NS } ns */
@@ -109,7 +24,7 @@ function getRamAllowance(ns, _host) {
 }
 
 /** @param {import(".").NS } ns */
-function getOrderedTargetArr(ns, _host) {
+function getOrderedTargetArr(ns, _host, simMinutes) {
     let host = _host;
     if (typeof host === "string" || host instanceof String) host = ns.getServer(host);
 
@@ -119,70 +34,32 @@ function getOrderedTargetArr(ns, _host) {
         .filter(serverIsHackable)
         .filter((hostname) => ns.getServerMaxMoney(hostname) > 0);
     for (let targetname of targetnames) {
-        hackRates.push([targetname, calcHackRate(ns, host, targetname, ramAllowance)]);
+        hackRates.push([targetname, calcHackRate(ns, host.hostname, targetname, ramAllowance, simMinutes)]);
     }
 
     return hackRates.sort((a, b) => b[1] - a[1]);
 }
 
 /** @param {import(".").NS } ns */
-function testOutput(ns) {
-    let player = ns.getPlayer();
-    let host = ns.getServer("home");
-    let targetnames = getOrderedTargetArr(ns, host);
-
-    for (let [targetname, hackrate] of targetnames) {
-        let target = ns.getServer(targetname);
-        target.moneyAvailable = target.moneyMax;
-        target.hackDifficulty = target.minDifficulty;
-
-        let tweaken = ns.formulas.hacking.weakenTime(target, player) / 1000;
-        let ramAllowance = getRamAllowance(ns, host);
-        let hackAmount = calcHackAmount(ns, host, target, ramAllowance);
-
-        ns.tprintf(
-            "%20s %10s/s %10s [%-2.2f%% of Max] every %s (hackrate: %s)",
-            target.hostname,
-            ns.nFormat(hackAmount / tweaken, "($0.000a)"),
-            ns.nFormat(hackAmount, "($0.000a)"),
-            (hackAmount / target.moneyMax) * 100,
-            ns.tFormat(tweaken * 1000),
-            ns.nFormat(hackrate, "($0.000a)")
-        );
-    }
-}
-
-function removeTarget(arr, key, value) {
-    let i = 0;
-    while (i < arr.length) {
-        if (arr[i][key] === value) {
-            arr.splice(i, 1);
-        } else {
-            ++i;
-        }
-    }
-    return arr;
-}
-
-/** @param {import(".").NS } ns */
 export async function main(ns) {
     setns(ns);
 
-    let player = ns.getPlayer();
     let allHostnames = allHosts();
-    let attackScript = "super_hack.ns";
+    let attackScript = "super_hack_adv.ns";
+    let attackLib = "hack_env.js";
 
     doProgramBuys();
 
     // soften all servers
     for (const hostName of allHostnames) {
         softenServer(hostName);
-        await ns.scp(attackScript, "home", hostName)
     }
 
     // create a dictionary mapping server size to server name array (with a special bucket for "home")
     let hostSizeDict = {};
-    for (let hostname of allHostnames.filter(canExecuteOnServer).filter((hostname) => ns.getServerMaxRam(hostname) >= 32)) {
+    for (let hostname of allHostnames
+        .filter(canExecuteOnServer)
+        .filter((hostname) => ns.getServerMaxRam(hostname) >= 32)) {
         let key = ns.getServerMaxRam(hostname);
 
         if (hostname === "home") key = "home";
@@ -196,7 +73,7 @@ export async function main(ns) {
     let targetArrDict = {};
     let badhosts = [];
     for (const [key, value] of Object.entries(hostSizeDict)) {
-        let orderedTargetArr = getOrderedTargetArr(ns, value[0]);
+        let orderedTargetArr = getOrderedTargetArr(ns, value[0], ns.args[0]);
         if (orderedTargetArr[0][1] === 0) {
             //ns.tprintf("Host %s does not have enough ram (%d) to execute a hack script", value[0], ns.getServerMaxRam(value[0]))
             badhosts.push(value[0]);
@@ -309,13 +186,21 @@ export async function main(ns) {
                 let targetname = targetnames.shift();
                 ns.tprintf("Starting %s on %s targeting %s", attackScript, hostname, targetname);
 
-                if (!ns.fileExists(attackScript, hostname)) await ns.scp(attackScript, "home", hostname);
+                await ns.scp(attackScript, "home", hostname);
+                await ns.scp(attackLib, "home", hostname);
 
-                ns.exec(attackScript, hostname, 1, targetname);
+                if (hostname === "home") {
+                    let allowedRam = ns.getServerMaxRam("home") - 64;
+                    if (allowedRam > 32) ns.exec(attackScript, hostname, 1, targetname, allowedRam);
+                    else
+                        ns.tprintf(
+                            "WARNING: Not enough max ram on home to safely run script (%d)",
+                            ns.getServerMaxRam("home")
+                        );
+                } else ns.exec(attackScript, hostname, 1, targetname);
             }
 
-            if (targetnames.length === 0)
-                break
+            if (targetnames.length === 0) break;
         }
     }
 
