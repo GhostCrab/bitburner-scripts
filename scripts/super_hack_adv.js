@@ -22,7 +22,7 @@ export async function main(ns) {
 
     env.simEnabled = false;
     if (env.simEnabled) {
-        while (env.simTime < 1000 * 60 * 5) {
+        while (env.simTime < 1000 * 60 * 2) {
             env.refresh(ns);
         }
         ns.tprintf(

@@ -1,4 +1,4 @@
-/** @type import(".").NS */
+/** @type import("./index.d").NS */
 let ns = null;
 
 function serverIsHackable(hostName) {
@@ -30,9 +30,9 @@ function matchWeakenTarget(a, target) {
 
 function assessHack(hostNames) {
     let hackableHosts = hostNames.filter(serverIsHackable).sort(serverValueSort);
-    let hackRam = ns.getScriptRam("hack.ns");
-    let growRam = ns.getScriptRam("grow.ns");
-    let weakenRam = ns.getScriptRam("weaken.ns");
+    let hackRam = ns.getScriptRam("hack.js");
+    let growRam = ns.getScriptRam("grow.js");
+    let weakenRam = ns.getScriptRam("weaken.js");
 
     let fundThres = 0.9;
     let targetServer = ns.getServer(hackableHosts[0]);

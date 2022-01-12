@@ -2,7 +2,7 @@
 let ns = null;
 
 function isScript(filename) {
-    return filename.indexOf(".ns") != -1;
+    return filename.indexOf(".js") != -1;
 }
 
 function isProgram(filename) {

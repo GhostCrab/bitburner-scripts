@@ -1,30 +1,39 @@
-import { allHosts, serverIsHackable, setns, softenServer, doProgramBuys, canExecuteOnServer } from "./util.ns";
+import { allHosts, serverIsHackable, setns, softenServer, doProgramBuys, canExecuteOnServer } from "./util.js";
 import { HackEnv, TSPACER } from "./hack_env.js";
 
-/** @param {import(".").NS } ns */
-function calcHackRate(ns, hostname, targetname, ramAllowance, simMinutes = 2) {
+/** @param {import("./index.d").NS } ns */
+async function calcHackRate(ns, hostname, targetname, ramAllowance, simMinutes = 2) {
     let env = new HackEnv(ns, targetname, hostname, ramAllowance);
     env.simEnabled = true;
 
     // simulate for 10 minutes
-    env.fastSim(ns, 1000 * 60 * simMinutes);
+    ns.tprintf("Running fastSim on %s=>%s", env.hostname, env.targetname)
+    await env.fastSim(ns, 1000 * 60 * simMinutes);
+
+    // ns.tprintf(
+    //     "Running Hack Rate on %s=>%s (%.2fGB Ram Allowance): %s/s",
+    //     env.hostname,
+    //     env.targetname,
+    //     env.ramAllowance,
+    //     ns.nFormat(env.simIncome / (env.simTime / 1000), "($0.000a)")
+    // );
 
     return env.simIncome / (env.simTime / 1000);
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function getRamAllowance(ns, _host) {
     let host = _host;
     if (typeof host === "string" || host instanceof String) host = ns.getServer(host);
 
     let ramAllowance = host.maxRam;
-    if (host.hostname === "home") ramAllowance -= 64;
+    //if (host.hostname === "home") ramAllowance -= 64;
 
     return ramAllowance;
 }
 
-/** @param {import(".").NS } ns */
-function getOrderedTargetArr(ns, _host, simMinutes) {
+/** @param {import("./index.d").NS } ns */
+async function getOrderedTargetArr(ns, _host, simMinutes) {
     let host = _host;
     if (typeof host === "string" || host instanceof String) host = ns.getServer(host);
 
@@ -34,18 +43,18 @@ function getOrderedTargetArr(ns, _host, simMinutes) {
         .filter(serverIsHackable)
         .filter((hostname) => ns.getServerMaxMoney(hostname) > 0);
     for (let targetname of targetnames) {
-        hackRates.push([targetname, calcHackRate(ns, host.hostname, targetname, ramAllowance, simMinutes)]);
+        hackRates.push([targetname, await calcHackRate(ns, host.hostname, targetname, ramAllowance, simMinutes)]);
     }
 
     return hackRates.sort((a, b) => b[1] - a[1]);
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 export async function main(ns) {
     setns(ns);
 
     let allHostnames = allHosts();
-    let attackScript = "super_hack_adv.ns";
+    let attackScript = "super_hack_adv.js";
     let attackLib = "hack_env.js";
 
     doProgramBuys();
@@ -73,9 +82,13 @@ export async function main(ns) {
     let targetArrDict = {};
     let badhosts = [];
     for (const [key, value] of Object.entries(hostSizeDict)) {
-        let orderedTargetArr = getOrderedTargetArr(ns, value[0], ns.args[0]);
+        let orderedTargetArr = await getOrderedTargetArr(ns, value[0], ns.args[0]);
         if (orderedTargetArr[0][1] === 0) {
-            //ns.tprintf("Host %s does not have enough ram (%d) to execute a hack script", value[0], ns.getServerMaxRam(value[0]))
+            ns.tprintf(
+                "Host %s does not have enough ram (%d) to execute a hack script",
+                value[0],
+                ns.getServerMaxRam(value[0])
+            );
             badhosts.push(value[0]);
         } else {
             targetArrDict[key] = orderedTargetArr;
@@ -157,9 +170,9 @@ export async function main(ns) {
                     for (let psInfo of ps) {
                         if (
                             psInfo.filename === attackScript ||
-                            psInfo.filename === "weaken.ns" ||
-                            psInfo.filename === "grow.ns" ||
-                            psInfo.filename === "hack.ns"
+                            psInfo.filename === "weaken.js" ||
+                            psInfo.filename === "grow.js" ||
+                            psInfo.filename === "hack.js"
                         ) {
                             ns.kill(psInfo.filename, hostname, psInfo.args);
                         }
@@ -190,8 +203,8 @@ export async function main(ns) {
                 await ns.scp(attackLib, "home", hostname);
 
                 if (hostname === "home") {
-                    let allowedRam = ns.getServerMaxRam("home") - 64;
-                    if (allowedRam > 32) ns.exec(attackScript, hostname, 1, targetname, allowedRam);
+                    let allowedRam = ns.getServerMaxRam("home") - 48;
+                    if (allowedRam >= 32) ns.exec(attackScript, hostname, 1, targetname, allowedRam);
                     else
                         ns.tprintf(
                             "WARNING: Not enough max ram on home to safely run script (%d)",
@@ -231,6 +244,6 @@ export async function main(ns) {
         if all tiers are full, you're done
 
     Launching new dispatcher:
-        scp dispatcher.ns to the host server, exec dispatcher.ns with the target, 1 thread
+        scp dispatcher.js to the host server, exec dispatcher.js with the target, 1 thread
     */
 }

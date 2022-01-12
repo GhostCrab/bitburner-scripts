@@ -1,4 +1,4 @@
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 export async function main(ns) {
 
 	for (let faction of ns.getPlayer().factions) {

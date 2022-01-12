@@ -5,12 +5,12 @@ function fltEq(a, b) {
     return a > b - epsilon && a < b + epsilon;
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function doWeaken(ns, _hostname, _targetname, ramAllowance) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
-    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
+    let weakenRam = ns.getScriptRam("weaken.js"); // 1.75GB
 
     let weakenAmountPerThread = ns.weakenAnalyze(1, host.cpuCores);
     let weakenThreads = Math.min(
@@ -37,16 +37,16 @@ function doWeaken(ns, _hostname, _targetname, ramAllowance) {
         );
     }
 
-    ns.exec("weaken.ns", host.hostname, weakenThreads, target.hostname);
+    ns.exec("weaken.js", host.hostname, weakenThreads, target.hostname);
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function doGrowAndWeaken(ns, _hostname, _targetname, ramAllowance, highMoney) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
-    let growRam = ns.getScriptRam("grow.ns"); // 1.75GB
-    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
+    let growRam = ns.getScriptRam("grow.js"); // 1.75GB
+    let weakenRam = ns.getScriptRam("weaken.js"); // 1.75GB
 
     let currentMoney = Math.max(1.0, target.moneyAvailable);
     let targetGrowMult = highMoney / currentMoney;
@@ -93,17 +93,17 @@ function doGrowAndWeaken(ns, _hostname, _targetname, ramAllowance, highMoney) {
         );
     }
 
-    ns.exec("weaken.ns", host.hostname, weakenThreads, target.hostname);
-    ns.exec("grow.ns", host.hostname, growThreads, target.hostname);
+    ns.exec("weaken.js", host.hostname, weakenThreads, target.hostname);
+    ns.exec("grow.js", host.hostname, growThreads, target.hostname);
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function doHackAndWeaken(ns, _hostname, _targetname) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
-    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
-    let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
+    let weakenRam = ns.getScriptRam("weaken.js"); // 1.75GB
+    let hackRam = ns.getScriptRam("hack.js"); // 1.70GB
 
     let fullHackThreads = Math.ceil(ns.hackAnalyzeThreads(target.hostname, target.moneyAvailable - lowMoney));
     let weakenAmountPerThread = ns.weakenAnalyze(1, host.cpuCores);
@@ -132,11 +132,11 @@ function doHackAndWeaken(ns, _hostname, _targetname) {
         );
     }
 
-    ns.exec("weaken.ns", host.hostname, weakenThreads, target.hostname);
-    ns.exec("hack.ns", host.hostname, hackThreads, target.hostname);
+    ns.exec("weaken.js", host.hostname, weakenThreads, target.hostname);
+    ns.exec("hack.js", host.hostname, hackThreads, target.hostname);
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function doHGW(ns, _hostname, _targetname, highMoney, lowMoney, ramAllowance, tspacer) {
     /*//////////// ALGO ////////////
         if hackRamCycle is greater than ramAllowance
@@ -149,9 +149,9 @@ function doHGW(ns, _hostname, _targetname, highMoney, lowMoney, ramAllowance, ts
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
-    let growRam = ns.getScriptRam("grow.ns"); // 1.75GB
-    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
-    let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
+    let growRam = ns.getScriptRam("grow.js"); // 1.75GB
+    let weakenRam = ns.getScriptRam("weaken.js"); // 1.75GB
+    let hackRam = ns.getScriptRam("hack.js"); // 1.70GB
 
     let targetHackAmount = target.moneyAvailable - lowMoney;
     let targetHackAmountStep = targetHackAmount * 0.001;
@@ -241,13 +241,13 @@ function doHGW(ns, _hostname, _targetname, highMoney, lowMoney, ramAllowance, ts
     let tGrowOffset = tweaken + tspacer - tgrow;
     let tGrowWeakenOffset = tspacer + tspacer;
 
-    ns.exec("weaken.ns", host.hostname, hackWeakenThreads, target.hostname, 0); // hack weaken, 0ms offset, finish 2nd
-    ns.exec("weaken.ns", host.hostname, growWeakenThreads, target.hostname, tGrowWeakenOffset); // grow weaken, --ms offset, finish 4th
-    ns.exec("grow.ns", host.hostname, growThreads, target.hostname, tGrowOffset); // --ms offset, finish 3rd
-    ns.exec("hack.ns", host.hostname, hackThreads, target.hostname, tHackOffset); // --ms offset, finish 1st
+    ns.exec("weaken.js", host.hostname, hackWeakenThreads, target.hostname, 0); // hack weaken, 0ms offset, finish 2nd
+    ns.exec("weaken.js", host.hostname, growWeakenThreads, target.hostname, tGrowWeakenOffset); // grow weaken, --ms offset, finish 4th
+    ns.exec("grow.js", host.hostname, growThreads, target.hostname, tGrowOffset); // --ms offset, finish 3rd
+    ns.exec("hack.js", host.hostname, hackThreads, target.hostname, tHackOffset); // --ms offset, finish 1st
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function calcHGWThreads(ns, _hostname, _targetname, highMoney, lowMoney) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
@@ -269,14 +269,14 @@ function calcHGWThreads(ns, _hostname, _targetname, highMoney, lowMoney) {
     return [hackWeakenThreads, growWeakenThreads, hackThreads, growThreads];
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) {
     let host = ns.getServer(_hostname);
     let target = ns.getServer(_targetname);
 
-    let growRam = ns.getScriptRam("grow.ns"); // 1.75GB
-    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
-    let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
+    let growRam = ns.getScriptRam("grow.js"); // 1.75GB
+    let weakenRam = ns.getScriptRam("weaken.js"); // 1.75GB
+    let hackRam = ns.getScriptRam("hack.js"); // 1.70GB
 
     let targetHackAmount = target.moneyMax * 0.9;
     let targetHackAmountStep = targetHackAmount * 0.001;
@@ -357,7 +357,7 @@ function calcHGWThreadsSmart(ns, _hostname, _targetname, ramAllowance, tspacer) 
     return [targetCycles, hackWeakenThreads, growWeakenThreads, hackThreads, growThreads];
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function launchHGW(
     ns,
     hostname,
@@ -377,14 +377,14 @@ function launchHGW(
     let tGrowOffset = tweaken + tspacer - tgrow;
     let tGrowWeakenOffset = tspacer + tspacer;
 
-    ns.exec("weaken.ns", hostname, hackWeakenThreads, targetname, 0, tag); // hack weaken, 0ms offset, finish 2nd
-    ns.exec("weaken.ns", hostname, growWeakenThreads, targetname, tGrowWeakenOffset, tag); // grow weaken, --ms offset, finish 4th
-    ns.exec("grow.ns", hostname, growThreads, targetname, tGrowOffset, tag); // --ms offset, finish 3rd
-    ns.exec("hack.ns", hostname, hackThreads, targetname, tHackOffset, tag); // --ms offset, finish 1st
+    ns.exec("weaken.js", hostname, hackWeakenThreads, targetname, 0, tag); // hack weaken, 0ms offset, finish 2nd
+    ns.exec("weaken.js", hostname, growWeakenThreads, targetname, tGrowWeakenOffset, tag); // grow weaken, --ms offset, finish 4th
+    ns.exec("grow.js", hostname, growThreads, targetname, tGrowOffset, tag); // --ms offset, finish 3rd
+    ns.exec("hack.js", hostname, hackThreads, targetname, tHackOffset, tag); // --ms offset, finish 1st
 }
 
 //** @param {NS} ns **/
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 export async function main(ns) {
     let ramOverride = ns.args[1];
     let _hostname = ns.getHostname();
@@ -398,13 +398,13 @@ export async function main(ns) {
     let lowMoney = target.moneyMax * lowThresholdFactor;
     let highMoney = target.moneyMax * highThresholdFactor;
 
-    if (!ns.fileExists("grow.ns", host.hostname)) await ns.scp("grow.ns", "home", host.hostname);
-    if (!ns.fileExists("weaken.ns", host.hostname)) await ns.scp("weaken.ns", "home", host.hostname);
-    if (!ns.fileExists("hack.ns", host.hostname)) await ns.scp("hack.ns", "home", host.hostname);
+    if (!ns.fileExists("grow.js", host.hostname)) await ns.scp("grow.js", "home", host.hostname);
+    if (!ns.fileExists("weaken.js", host.hostname)) await ns.scp("weaken.js", "home", host.hostname);
+    if (!ns.fileExists("hack.js", host.hostname)) await ns.scp("hack.js", "home", host.hostname);
 
-    let growRam = ns.getScriptRam("grow.ns"); // 1.75GB
-    let weakenRam = ns.getScriptRam("weaken.ns"); // 1.75GB
-    let hackRam = ns.getScriptRam("hack.ns"); // 1.70GB
+    let growRam = ns.getScriptRam("grow.js"); // 1.75GB
+    let weakenRam = ns.getScriptRam("weaken.js"); // 1.75GB
+    let hackRam = ns.getScriptRam("hack.js"); // 1.70GB
 
     let ramAllowance = host.maxRam - host.ramUsed;
     //if (host.hostname === "home") ramAllowance -= 48;
@@ -432,7 +432,7 @@ export async function main(ns) {
     target = ns.getServer(target.hostname);
     while (target.hackDifficulty > target.minDifficulty) {
         doWeaken(ns, host.hostname, target.hostname, ramAllowance);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
+        while (ns.isRunning("weaken.js", host.hostname, target.hostname)) await ns.sleep(500);
 
         if (debug) {
             let oldHackDifficulty = target.hackDifficulty;
@@ -447,7 +447,7 @@ export async function main(ns) {
     target = ns.getServer(target.hostname);
     while (target.moneyAvailable < highMoney) {
         doGrowAndWeaken(ns, host.hostname, target.hostname, ramAllowance, highMoney);
-        while (ns.isRunning("weaken.ns", host.hostname, target.hostname)) await ns.sleep(500);
+        while (ns.isRunning("weaken.js", host.hostname, target.hostname)) await ns.sleep(500);
 
         if (debug) {
             let oldMoney = target.moneyAvailable;
@@ -498,7 +498,7 @@ export async function main(ns) {
         let sleepTimer = tweakenFullCycle - hgwCycles * tCycleSpacer + tCycleSpacer;
         if (sleepTimer > 0) await ns.sleep(sleepTimer);
 
-        // while (ns.isRunning("weaken.ns", host.hostname, target.hostname, 400, "9")) {
+        // while (ns.isRunning("weaken.js", host.hostname, target.hostname, 400, "9")) {
         //     await ns.sleep(50)
         //     if (debug) {
         //         let oldMoney = target.moneyAvailable

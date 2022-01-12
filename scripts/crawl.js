@@ -1,4 +1,4 @@
-/** @type import(".").NS */
+/** @type import("./index.d").NS */
 let ns = null;
 
 function printServer(serverArg) {
@@ -39,16 +39,16 @@ async function hackHost(hostName, targetName) {
     const hostServer = ns.getServer(hostName);
     const targetServer = ns.getServer(targetName);
 
-    let hackMeRam = ns.getScriptRam("hack_me.ns");
+    let hackMeRam = ns.getScriptRam("hack_me.js");
     let hackThreads = Math.floor(hostServer.maxRam / hackMeRam);
 
     if (hackThreads === 0) {
-        ns.tprint(hostName + " unable to execute hack_me.ns (" + hostServer.maxRam + "/" + hackMeRam + ")");
+        ns.tprint(hostName + " unable to execute hack_me.js (" + hostServer.maxRam + "/" + hackMeRam + ")");
         return;
     }
 
     ns.tprint(
-        "Running hack_me.ns on " +
+        "Running hack_me.js on " +
             hostName +
             " on " +
             hackThreads +
@@ -59,8 +59,8 @@ async function hackHost(hostName, targetName) {
             "]"
     );
     ns.killall(hostName);
-    await ns.scp("hack_me.ns", "home", hostName);
-    ns.exec("hack_me.ns", hostName, hackThreads, targetName);
+    await ns.scp("hack_me.js", "home", hostName);
+    ns.exec("hack_me.js", hostName, hackThreads, targetName);
 }
 
 function listServers(hosts) {

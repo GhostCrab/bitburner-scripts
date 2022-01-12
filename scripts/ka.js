@@ -1,4 +1,4 @@
-import { setns, allHosts } from "./util.ns";
+import { setns, allHosts } from "./util.js";
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {

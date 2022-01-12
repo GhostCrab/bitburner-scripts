@@ -1,8 +1,8 @@
 export const debug = false;
 export const TSPACER = 50;
-export const WEAKENNS = "weaken.ns";
-export const GROWNS = "grow.ns";
-export const HACKNS = "hack.ns";
+export const WEAKENNS = "weaken.js";
+export const GROWNS = "grow.js";
+export const HACKNS = "hack.js";
 
 export const HackState = {
     UNSET: "UNDEFINED STATE",
@@ -13,7 +13,7 @@ export const HackState = {
 };
 
 export class HackEnv {
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     constructor(ns, targetname, hostname = "", ramAllowance = -1, highMoney = -1, lowMoney = -1, tspacer = TSPACER) {
         this.targetname = targetname;
         this.hostname = hostname === "" ? ns.getHostname() : hostname;
@@ -139,7 +139,7 @@ export class HackEnv {
         return Math.max(ns.getServerMoneyAvailable(this.targetname), 1);
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     getWeakenTime(ns) {
         if (this.simEnabled) return ns.formulas.hacking.weakenTime(this.simTarget, this.simPlayer);
 
@@ -170,7 +170,6 @@ export class HackEnv {
         // growThreads in a simulation will probably overshoot because the actual security is too high.
         // start with the bad estimate and reduce grow threads until the result from growPercent is less
         // than growMult, then increase it back by 1
-
         if (this.simEnabled) {
             while (
                 ns.formulas.hacking.growPercent(this.simTarget, --growThreads, this.simPlayer, this.cores) >
@@ -180,11 +179,10 @@ export class HackEnv {
             // correct overshoot
             growThreads++;
         }
-
         return growThreads;
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     setState(ns) {
         if (this.isWRunning(ns)) {
             // Process is running on this target, dont update the state
@@ -217,9 +215,10 @@ export class HackEnv {
             if (hwIncome > hgwIncome) this.state = HackState.HW;
             else this.state = HackState.HGW;
         }
+
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     refresh(ns) {
         if (this.isWRunning(ns)) {
             // process in progress, wait for next refresh to update
@@ -344,14 +343,14 @@ export class HackEnv {
     }
 
     doneWeaken(ns) {
-        return this.getServerSecurityLevel(ns) === ns.getServerMinSecurityLevel(this.targetname);
+        return this.getServerSecurityLevel(ns) - 0.01 <= ns.getServerMinSecurityLevel(this.targetname);
     }
 
     doneGrow(ns) {
         return this.getServerMoneyAvailable(ns) >= this.highMoney;
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     updateForW(ns) {
         // Target Info
         this.targetSec = this.getServerSecurityLevel(ns);
@@ -374,7 +373,7 @@ export class HackEnv {
         return this.weakenThreads * this.weakenAmountPerThread >= secDiff;
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     updateForGW(ns) {
         // Target Info
         this.targetMoneyAvailable = this.getServerMoneyAvailable(ns);
@@ -408,7 +407,7 @@ export class HackEnv {
         return this.growThreads >= growThreadsFull;
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     updateForHW(ns) {
         // Find out how much money I can gain back in a single GW cycle and never hack more than that
         let useAllRamState = this.useAllRam;
@@ -465,7 +464,7 @@ export class HackEnv {
         return this.hackThreads >= hackThreadsFull;
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     updateForHGW(ns) {
         // Target Info
         this.targetMoneyAvailable = this.getServerMoneyAvailable(ns);
@@ -511,6 +510,7 @@ export class HackEnv {
             if (ramCycleAllowance < 16) return 0;
 
             this.hackThreads = Math.floor(ramCycleAllowance / this.hackRam);
+            this.hackThreadStep = Math.floor(this.hackThreads * .01)
             this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
             if (this.hackTotal >= this.targetMoneyAvailable) {
                 this.hackThreads = 1 / this.hackPercentPerThread - 1;
@@ -531,8 +531,16 @@ export class HackEnv {
                 this.weakenThreadsHack * this.weakenRam +
                 this.weakenThreadsGrow * this.weakenRam;
 
+            let failcycles = 0
+
+            if (this.ramPerCycle > ramCycleAllowance) {
+                let failRatio = ramCycleAllowance / this.ramPerCycle;
+                this.hackThreads = Math.min(this.hackThreads * (failRatio * 1.1), this.hackThreads);
+            }
+
             while (this.ramPerCycle > ramCycleAllowance) {
-                this.hackThreads--;
+                failcycles++;
+                this.hackThreads -= this.hackThreadStep
                 this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
                 this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
                 this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
@@ -547,6 +555,8 @@ export class HackEnv {
                     this.weakenThreadsHack * this.weakenRam +
                     this.weakenThreadsGrow * this.weakenRam;
             }
+
+            //ns.tprintf("failcycles: %d", failcycles)
 
             this.cycleBatchTime = this.cycleFullTime + this.cycleSpacer * this.cycleTotal;
             if (this.cycleTotal === 1) this.cycleBatchTime = this.cycleFullTime;
@@ -614,7 +624,7 @@ export class HackEnv {
         return this.cycleTotal === 1 ? this.hackThreads >= hackThreadsFull : true;
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     execW(ns) {
         if (this.simEnabled) {
             this.simTarget.hackDifficulty -= this.weakenThreads * this.weakenAmountPerThread;
@@ -624,14 +634,13 @@ export class HackEnv {
             );
 
             this.simTime += this.weakenTime;
-
             return;
         }
 
         ns.exec(WEAKENNS, this.hostname, this.weakenThreads, this.targetname);
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     execGW(ns) {
         if (this.simEnabled) {
             let simGrowMult = ns.formulas.hacking.growPercent(
@@ -664,7 +673,7 @@ export class HackEnv {
         ns.exec(WEAKENNS, this.hostname, this.weakenThreadsGrow, this.targetname);
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     execHW(ns) {
         if (this.simEnabled) {
             let hackChance = ns.formulas.hacking.hackChance(this.simTarget, this.simPlayer);
@@ -693,7 +702,7 @@ export class HackEnv {
         ns.exec(WEAKENNS, this.hostname, this.weakenThreadsHack, this.targetname);
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     execHGW(ns) {
         if (this.simEnabled) {
             // HACK
@@ -760,7 +769,7 @@ export class HackEnv {
         }
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     isWRunning(ns) {
         if (this.simEnabled) return false;
 
@@ -773,36 +782,41 @@ export class HackEnv {
         return false;
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     async waitW(ns) {
         while (this.isWRunning(ns)) {
             await ns.sleep(this.tspacer);
         }
     }
 
-    /** @param {import(".").NS } ns */
+    /** @param {import("./index.d").NS } ns */
     fastSim(ns, time) {
         this.resetSim(ns);
         this.simEnabled = true;
 
-        if (this.doneWeaken(ns)) {
+        if (!this.doneWeaken(ns)) {
             this.weakenTime = this.getWeakenTime(ns);
             this.simTime += this.weakenTime + this.tspacer;
             this.simTarget.hackDifficulty = this.simTarget.minDifficulty;
         }
 
-        if (this.simTime > time) return this.simIncome;
+        if (this.simTime > time) 
+            return this.simIncome;
+
+            //x = pow(y, 5)
+            //y = pow(x, 1/5)
 
         if (!this.doneGrow(ns)) {
             this.updateForGW(ns);
 
-            while (this.simTarget.moneyAvailable < ns.getServerMaxMoney(this.targetname)) {
+            while ((this.simTarget.moneyAvailable + 1000) < ns.getServerMaxMoney(this.targetname)) {
                 let simGrowMult = ns.formulas.hacking.growPercent(
                     this.simTarget,
                     this.growThreads,
                     this.simPlayer,
                     this.cores
                 );
+
                 this.simTarget.moneyAvailable *= simGrowMult;
                 this.simTarget.moneyAvailable = Math.min(
                     this.simTarget.moneyAvailable,
@@ -811,32 +825,33 @@ export class HackEnv {
 
                 this.simTime += this.weakenTime + this.tspacer;
                 this.simTarget.hackDifficulty = this.simTarget.minDifficulty;
-
-                if (this.simTime > time) return this.simIncome;
             }
         }
 
-        if (this.simTime > time) return this.simIncome;
+        if (this.simTime > time) 
+            return this.simIncome;
 
         this.updateForHW(ns);
         let hwTotal = this.hackTotal;
         let hwTime = this.weakenTime * 2 + this.tspacer * 2;
-		let hwIncome = hwTotal / hwTime
+        let hwIncome = hwTotal / hwTime;
         this.updateForHGW(ns);
         let hgwTotal = this.hackTotal * this.cycleTotal;
         let hgwTime = this.cycleFullTime;
-		let hgwIncome = hgwTotal / hgwTime
+        let hgwIncome = hgwTotal / hgwTime;
 
-        while (this.simTime < time) {
-            if (hwIncome > hgwIncome) {
-				this.simTime += hwTime
-				this.simIncome += hwTotal
-            } else {
-				this.simTime += hgwTime
-				this.simIncome += hgwTotal
-			}
+        let timeRemaining = time - this.simTime
+        let hackCycles = 0;
+        if (hwIncome > hgwIncome) {
+            hackCycles = Math.floor(timeRemaining / hwTime)
+            this.simTime += hackCycles * hwTime
+            this.simIncome += hackCycles * hwTotal
+        } else {
+            hackCycles = Math.floor(timeRemaining / hgwTime)
+            this.simTime += hackCycles * hgwTime
+            this.simIncome += hackCycles * hwTotal
         }
 
-		return this.simIncome;
+        return this.simIncome;
     }
 }

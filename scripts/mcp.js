@@ -1,5 +1,5 @@
 /** @type import(".").NS */
-import { setns, mapHosts, doProgramBuys } from "./util.ns";
+import { setns, mapHosts, doProgramBuys } from "./util.js";
 
 function printAugStats(ns, stats) {
     if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult);
@@ -157,8 +157,8 @@ export async function main(ns) {
     let sortedFactions = player.factions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a))
 
     let allPurchaseableAugs = []
-    //for (let faction of sortedFactions) {
-    for (let faction of allFactions) {
+    for (let faction of sortedFactions) {
+    //for (let faction of allFactions) {
         let augs = ns
             .getAugmentationsFromFaction(faction)
             .map((name) => {

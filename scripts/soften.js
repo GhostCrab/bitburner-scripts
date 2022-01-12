@@ -1,7 +1,7 @@
 /** @type import(".").NS */
 let ns = null;
 
-import { allHosts, setns, softenServer } from "./util.ns";
+import { allHosts, setns, softenServer } from "./util.js";
 
 /** @param {NS} _ns **/
 export async function main(_ns) {

@@ -1,4 +1,4 @@
-/** @type import(".").NS */
+/** @type import("./index.d").NS */
 let ns = null;
 
 export function setns(_ns) {

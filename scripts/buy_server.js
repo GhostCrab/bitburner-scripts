@@ -1,4 +1,4 @@
-/** @type import(".").NS */
+/** @type import("./index.d").NS */
 let ns = null;
 
 function serverRamSortAsc(h1, h2) {
@@ -41,37 +41,37 @@ export async function main(_ns) {
 
         let cost = ns.getPurchasedServerCost(ram);
         let maxServers = Math.min(Math.floor(cash / cost), 25);
-        ns.tprintf("**TEST** run buy_server.ns %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
+        ns.tprintf("run buy_server.js %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
 
         ram /= 2;
         if (ram < 256) return;
         cost = ns.getPurchasedServerCost(ram);
         maxServers = Math.min(Math.floor(cash / cost), 25);
-        ns.tprintf("**TEST** run buy_server.ns %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
+        ns.tprintf("run buy_server.js %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
 
         ram /= 2;
         if (ram < 256) return;
         cost = ns.getPurchasedServerCost(ram);
         maxServers = Math.min(Math.floor(cash / cost), 25);
-        ns.tprintf("**TEST** run buy_server.ns %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
+        ns.tprintf("run buy_server.js %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
 
         ram /= 2;
         if (ram < 256) return;
         cost = ns.getPurchasedServerCost(ram);
         maxServers = Math.min(Math.floor(cash / cost), 25);
-        ns.tprintf("**TEST** run buy_server.ns %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
+        ns.tprintf("run buy_server.js %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
 
         ram /= 2;
         if (ram < 256) return;
         cost = ns.getPurchasedServerCost(ram);
         maxServers = Math.min(Math.floor(cash / cost), 25);
-        ns.tprintf("**TEST** run buy_server.ns %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
+        ns.tprintf("run buy_server.js %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
 
         ram /= 2;
         if (ram < 256) return;
         cost = ns.getPurchasedServerCost(ram);
         maxServers = Math.min(Math.floor(cash / cost), 25);
-        ns.tprintf("**TEST** run buy_server.ns %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
+        ns.tprintf("run buy_server.js %d %d %s", ram, maxServers, ns.nFormat(cost * maxServers, "($0.000a)"));
 
         return;
     }

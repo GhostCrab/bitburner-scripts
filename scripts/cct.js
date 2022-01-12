@@ -1,4 +1,4 @@
-import { setns, mapHosts } from "./util.ns";
+import { setns, mapHosts } from "./util.js";
 
 function printCCT(ns, cct) {
     ns.tprintf("%s %s:", cct.host, cct.name);
@@ -7,7 +7,7 @@ function printCCT(ns, cct) {
     ns.tprintf("  %s", cct.data);
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 function answerCCT(ns, cct, answer) {
     let reward = ns.codingcontract.attempt(answer, cct.name, cct.host, { returnReward: true });
 
@@ -149,7 +149,7 @@ class CCT {
     }
 }
 
-/** @param {import(".").NS } ns */
+/** @param {import("./index.d").NS } ns */
 export async function main(ns) {
     setns(ns);
 
