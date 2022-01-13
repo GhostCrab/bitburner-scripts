@@ -56,7 +56,7 @@ function assessHack(hostNames) {
     );
     ns.tprintf("  %25s: %.2fx, %d Threads", "Growth Required", growthRequired, growThreadsNeeded);
     ns.tprintf("  %25s: %s @ %s", "Server Growth", targetServer.serverGrowth, ns.tFormat(targetGrowTime));
-    ns.tprintf("  %25s: %s", "Weaken Time", targetServer.serverGrowth, ns.tFormat(targetGrowTime));
+    ns.tprintf("  %25s: %s", "Weaken Time", ns.tFormat(targetWeakenTime));
     ns.tprintf(
         "  %25s: %s / %s / %s",
         "Hack Difficulty [M/B/H]",

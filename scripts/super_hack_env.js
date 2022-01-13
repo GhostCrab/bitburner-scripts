@@ -41,10 +41,12 @@ class Host {
     }
 
     // return # of threads successfully allocated
-    tryReserveThreads(script, threads, offset) {
+    tryReserveThreads(ns, script, threads, offset) {
         let reservedThreadCount = this.getReservedThreadCount();
-        let newThreadCount = Math.min(this.maxThreads - reservedThreadCount, threads);
 
+        if (reservedThreadCount === this.maxThreads) return 0;
+
+        let newThreadCount = Math.min(this.maxThreads - reservedThreadCount, threads);
         this.reservedScriptCalls.push({ script: script, threads: newThreadCount, offset: offset });
 
         return newThreadCount;
@@ -143,10 +145,10 @@ export class SuperHackEnv {
         this.maxThreads = 0;
         this.hosts.map((x) => (this.maxThreads += x.maxThreads), this);
 
-        if (debug) {
-            this.hosts.map((x) => ns.tprintf("  %32s: %d", x.hostname, x.maxThreads));
-            ns.tprintf("Max Threads: %d", this.maxThreads);
-        }
+        // if (debug) {
+        //     this.hosts.map((x) => ns.tprintf("  %32s: %d", x.hostname, x.maxThreads));
+        //     ns.tprintf("Max Threads: %d", this.maxThreads);
+        // }
     }
 
     async init(ns, force = false) {
@@ -226,6 +228,7 @@ export class SuperHackEnv {
         return ns.hackAnalyze(this.targetname);
     }
 
+    /** @param {import(".").NS } ns */
     calcGrowThreads(ns) {
         let growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
 
@@ -500,6 +503,8 @@ export class SuperHackEnv {
 
     /** @param {import(".").NS } ns */
     updateForHGW(ns) {
+        console.time(`updateForHGW ${this.targetname}`);
+        console.time(`updateForHGW PRE ${this.targetname}`);
         // Target Info
         this.targetMoneyAvailable = this.getServerMoneyAvailable(ns);
         this.targetSec = this.getServerSecurityLevel(ns);
@@ -538,7 +543,9 @@ export class SuperHackEnv {
         this.cycleMax = Math.floor((this.cycleFitTime - hackStartTime) / this.cycleSpacer) + 1;
 
         this.threadsPerCycle = this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
+        console.timeEnd(`updateForHGW PRE ${this.targetname}`);
 
+        let hackReduceCounter = 0;
         let setCycle = function () {
             if (this.cycleTotal <= 0) return 0;
             let cycleThreadAllowance = Math.floor((this.maxThreads / this.cycleTotal) * 100) / 100;
@@ -565,11 +572,13 @@ export class SuperHackEnv {
             // by the current ratio of hack threads to grow + weaken threads. Overestimate a little bit
             // and let the reducer take care of the extra.
             if (this.threadsPerCycle > cycleThreadAllowance) {
-                let hackRatio = this.maxThreads * (this.hackThreads / this.threadsPerCycle);
-                this.hackThreads = Math.min(this.maxThreads * hackRatio * 1.1, this.hackThreads);
+                //let hackRatio = this.maxThreads * (this.hackThreads / this.threadsPerCycle);
+                //this.hackThreads = Math.min(this.maxThreads * hackRatio * 1.1, this.hackThreads);
+                this.hackThreads = cycleThreadAllowance * (this.hackThreads / this.threadsPerCycle);
             }
 
             while (this.threadsPerCycle > cycleThreadAllowance) {
+                hackReduceCounter++
                 this.hackThreads--;
 
                 if (this.hackThreads <= 0) return 0;
@@ -594,6 +603,7 @@ export class SuperHackEnv {
 
         let cycleIncomes = new Array(this.cycleMax + 1);
 
+        console.time(`updateForHGW Cycle Max Calc ${this.targetname}`);
         // find first cycle counting down from the top where income > 0, since the algorithm doesnt like
         // flat lines and any cylcle count that results in a ram allocation less than a threshold automatically
         // returns 0
@@ -606,6 +616,10 @@ export class SuperHackEnv {
         }
         cycleMax++;
 
+        console.timeEnd(`updateForHGW Cycle Max Calc ${this.targetname}`);
+
+        console.time(`updateForHGW Cycle Target Calc ${this.targetname}`);
+
         // find local maximum of cycleIncomes
         // target center value,
         //  if value to left of target is larger than target, recenter target to left of current target
@@ -613,7 +627,9 @@ export class SuperHackEnv {
         //  if values to left and right of target are both less than target, keep target
         let cycleMin = 0;
         let cycleTarget = 0;
+        let cycleSearch = 0;
         while (true) {
+            cycleSearch++;
             cycleTarget = cycleMin + Math.floor((cycleMax - cycleMin) / 2);
 
             if (cycleTarget === this.cycleMax || cycleTarget === 1) break;
@@ -646,18 +662,24 @@ export class SuperHackEnv {
 
         this.cycleTotal = cycleTarget;
         setCycle();
+        console.log(`${this.targetname} cycleSearch: ${cycleSearch}; hackReduceCounter: ${hackReduceCounter}`);
 
+        console.timeEnd(`updateForHGW Cycle Target Calc ${this.targetname}`);
+
+        console.timeEnd(`updateForHGW ${this.targetname}`);
         return this.cycleTotal === 1 ? this.hackThreads >= hackThreadsFull : true;
     }
 
-    reserveThreadsForExecution(script, threads, offset = 0) {
+    reserveThreadsForExecution(ns, script, threads, offset = 0) {
         let unallocatedThreads = threads;
         for (const host of this.hosts) {
-            unallocatedThreads -= host.tryReserveThreads(script, unallocatedThreads, offset);
-            if (unallocatedThreads === 0) return true;
+            unallocatedThreads -= host.tryReserveThreads(ns, script, unallocatedThreads, offset);
+            if (unallocatedThreads === 0) {
+                return true;
+            }
         }
 
-        ns.printf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script);
+        ns.tprintf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script);
         return false;
     }
 
@@ -688,7 +710,7 @@ export class SuperHackEnv {
             return;
         }
 
-        this.reserveThreadsForExecution(WEAKENNS, this.weakenThreads);
+        this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreads);
         this.execute(ns);
         this.resetThreads();
     }
@@ -724,8 +746,8 @@ export class SuperHackEnv {
 
         // start grow such that it finishes slightly before weaken
         let growOffsetTime = this.weakenTime - this.tspacer - this.growTime;
-        this.reserveThreadsForExecution(GROWNS, this.growThreads, growOffsetTime);
-        this.reserveThreadsForExecution(WEAKENNS, this.weakenThreadsGrow);
+        this.reserveThreadsForExecution(ns, GROWNS, this.growThreads, growOffsetTime);
+        this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsGrow);
         this.execute(ns);
         this.resetThreads();
     }
@@ -762,8 +784,8 @@ export class SuperHackEnv {
 
         // start hack such that it finishes slightly before weaken
         let hackOffsetTime = this.weakenTime - this.tspacer - this.hackTime;
-        this.reserveThreadsForExecution(HACKNS, this.hackThreads, hackOffsetTime);
-        this.reserveThreadsForExecution(WEAKENNS, this.weakenThreadsHack);
+        this.reserveThreadsForExecution(ns, HACKNS, this.hackThreads, hackOffsetTime);
+        this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack);
         this.execute(ns);
         this.resetThreads();
     }
@@ -829,10 +851,15 @@ export class SuperHackEnv {
         for (let i = this.cycleTotal - 1; i >= 0; i--) {
             let cycleOffsetTime = i * this.cycleSpacer;
 
-            this.reserveThreadsForExecution(WEAKENNS, this.weakenThreadsHack, cycleOffsetTime);
-            this.reserveThreadsForExecution(WEAKENNS, this.weakenThreadsGrow, cycleOffsetTime + weakenGrowOffsetTime);
-            this.reserveThreadsForExecution(HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
-            this.reserveThreadsForExecution(GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
+            this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack, cycleOffsetTime);
+            this.reserveThreadsForExecution(
+                ns,
+                WEAKENNS,
+                this.weakenThreadsGrow,
+                cycleOffsetTime + weakenGrowOffsetTime
+            );
+            this.reserveThreadsForExecution(ns, HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
+            this.reserveThreadsForExecution(ns, GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
         }
 
         this.execute(ns);
@@ -877,7 +904,12 @@ export class SuperHackEnv {
 
             this.simTime += this.weakenTime + this.tspacer;
 
-            ns.tprintf("WEAKEN: Fast Sim Time: %s (%s + %s)", ns.tFormat(this.simTime, true),ns.tFormat(this.weakenTime, true),ns.tFormat(this.tspacer, true));
+            // ns.tprintf(
+            //     "WEAKEN: Fast Sim Time: %s (%s + %s)",
+            //     ns.tFormat(this.simTime, true),
+            //     ns.tFormat(this.weakenTime, true),
+            //     ns.tFormat(this.tspacer, true)
+            // );
 
             if (this.simTime > time) return this.simIncome;
         }
@@ -894,7 +926,12 @@ export class SuperHackEnv {
             this.simTime += this.weakenTime + this.tspacer;
             this.simTarget.hackDifficulty = this.simTarget.minDifficulty;
 
-            ns.tprintf("GROW-WEAKEN: Fast Sim Time: %s (%s + %s)", ns.tFormat(this.simTime, true),ns.tFormat(this.weakenTime, true),ns.tFormat(this.tspacer, true));
+            // ns.tprintf(
+            //     "GROW-WEAKEN: Fast Sim Time: %s (%s + %s)",
+            //     ns.tFormat(this.simTime, true),
+            //     ns.tFormat(this.weakenTime, true),
+            //     ns.tFormat(this.tspacer, true)
+            // );
 
             if (this.simTime > time) return this.simIncome;
         }
@@ -915,29 +952,29 @@ export class SuperHackEnv {
             this.simTime += hackCycles * hwTime;
             this.simIncome += hackCycles * hwTotal;
 
-            ns.tprintf(
-                "HACK-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
-                ns.tFormat(this.simTime, true),
-                ns.nFormat(this.simIncome, "($0.000a)"),
-                ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)"),
-                hackCycles,
-                ns.tFormat(hwTime, true),
-            );
+            // ns.tprintf(
+            //     "HACK-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
+            //     ns.tFormat(this.simTime, true),
+            //     ns.nFormat(this.simIncome, "($0.000a)"),
+            //     ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)"),
+            //     hackCycles,
+            //     ns.tFormat(hwTime, true)
+            // );
         } else {
             hackCycles = Math.ceil(timeRemaining / hgwTime);
             this.simTime += hackCycles * hgwTime;
             this.simIncome += hackCycles * hgwTotal;
 
-            ns.tprintf(
-                "HACK-GROW-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
-                ns.tFormat(this.simTime, true),
-                ns.nFormat(this.simIncome, "($0.000a)"),
-                ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)"),
-                hackCycles,
-                ns.tFormat(hgwTime, true),
-            );
+            // ns.tprintf(
+            //     "HACK-GROW-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
+            //     ns.tFormat(this.simTime, true),
+            //     ns.nFormat(this.simIncome, "($0.000a)"),
+            //     ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)"),
+            //     hackCycles,
+            //     ns.tFormat(hgwTime, true)
+            // );
         }
 
-        return this.simIncome;
+        return this.simIncome / (this.simTime / 1000);
     }
 }
