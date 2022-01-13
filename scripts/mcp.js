@@ -1,5 +1,5 @@
 /** @type import(".").NS */
-import { setns, mapHosts, doProgramBuys } from "./util.js";
+import { setns, mapHosts, doBuyAndSoftenAll } from "./util.js";
 
 function printAugStats(ns, stats) {
     if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult);
@@ -55,8 +55,14 @@ class Augmentation {
         this.stats = ns.getAugmentationStats(this.name);
         this.owned = ownedAugs.includes(this.name);
         this.installed = installedAugs.includes(this.name);
-        this.purchaseable = ns.getFactionRep(faction) >=  this.rep
-        let installedStr = this.installed ? "INSTALLED" : this.owned ? "OWNED" : this.purchaseable? "PURCHASEABLE" : "";
+        this.purchaseable = ns.getFactionRep(faction) >= this.rep;
+        let installedStr = this.installed
+            ? "INSTALLED"
+            : this.owned
+            ? "OWNED"
+            : this.purchaseable
+            ? "PURCHASEABLE"
+            : "";
         this.str = `${this.faction}: ${this.name} - ${ns.nFormat(this.price, "$0.000a")} [${ns.nFormat(
             this.rep,
             "0.000a"
@@ -78,13 +84,14 @@ class Augmentation {
         if (this.stats.hacking_speed_mult) return true;
         if (this.name === "BitRunners Neurolink" || this.name === "CashRoot Starter Kit" || this.name === "PCMatrix")
             return true;
-    
+
         return false;
     }
 }
 
 async function doBackdoors(ns) {
     const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a", "ecorp"];
+    //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
     let hosts = mapHosts();
 
     for (const [hostName, trail] of Object.entries(hosts)) {
@@ -110,7 +117,7 @@ async function doBackdoors(ns) {
 export async function main(ns) {
     setns(ns);
 
-    doProgramBuys();
+    doBuyAndSoftenAll();
     await doBackdoors(ns);
 
     let player = ns.getPlayer();
@@ -154,11 +161,11 @@ export async function main(ns) {
         // "Church of the Machine God",
     ];
 
-    let sortedFactions = player.factions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a))
+    let sortedFactions = player.factions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
 
-    let allPurchaseableAugs = []
+    let allPurchaseableAugs = [];
     for (let faction of sortedFactions) {
-    //for (let faction of allFactions) {
+        //for (let faction of allFactions) {
         let augs = ns
             .getAugmentationsFromFaction(faction)
             .map((name) => {
@@ -171,8 +178,8 @@ export async function main(ns) {
                 augsToBuy.push(aug);
             }
             if (aug.isHackUseful() && aug.purchaseable && !aug.owned && !aug.installed) {
-                allPurchaseableAugs.push(aug)
-            }            
+                allPurchaseableAugs.push(aug);
+            }
         }
 
         ns.tprintf("%s (rep: %d):", faction, ns.getFactionRep(faction));
@@ -182,10 +189,10 @@ export async function main(ns) {
         }
     }
 
-    allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price)
+    allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price);
 
     for (let aug of allPurchaseableAugs) {
-        //ns.purchaseAugmentation(aug.faction, aug.name)
+        ns.purchaseAugmentation(aug.faction, aug.name)
         ns.tprintf("%s", aug);
     }
 }

@@ -1,3 +1,5 @@
+// THIS IS A TEST
+
 function printServer(ns, serverArg) {
     let server = serverArg;
     if (server instanceof String) server = ns.getServer(server);

@@ -1,15 +1,48 @@
 import { allHosts, serverIsHackable, setns, canExecuteOnServer } from "./util.js";
-import { HackEnv } from "./hack_env.js";
+import { SuperHackEnv } from "./super_hack_env.js";
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
     setns(ns);
 
+    // ns.exec("buy_programs.js", "home")
+    // await ns.sleep(500)
+    // ns.exec("soften.js", "home")
+    // await ns.sleep(500)
+
     let allHostnames = allHosts();
     let attackScript = "super_hack_adv.js";
     let attackLib = "hack_env.js";
 
-    // maybe run soften and program_buys with some waits first
+    let env = new SuperHackEnv(ns, "millenium-fitness", allHostnames.filter(canExecuteOnServer))
+    await env.init(ns)
+
+    env.simEnabled = true
+    while (env.simTime < 1000 * 60 * 20) {
+        env.refresh(ns);
+        await ns.sleep(20)
+    }
+
+    ns.tprintf(
+        "Time Elapsed: %s; Income %s | %s/s",
+        ns.tFormat(env.simTime),
+        ns.nFormat(env.simIncome, "($0.000a)"),
+        ns.nFormat(env.simIncome / (env.simTime / 1000), "($0.000a)")
+    );
+
+    let env2 = new SuperHackEnv(ns, "millenium-fitness", allHostnames.filter(canExecuteOnServer))
+    await env2.init(ns)
+
+    env2.fastSim(ns, 1000 * 60 * 20)
+
+    ns.tprintf(
+        "Time Elapsed: %s; Income %s | %s/s",
+        ns.tFormat(env2.simTime),
+        ns.nFormat(env2.simIncome, "($0.000a)"),
+        ns.nFormat(env2.simIncome / (env2.simTime / 1000), "($0.000a)")
+    );
+
+    return;
 
     // create a dictionary mapping server size to server name array (with a special bucket for "home")
     let hostSizeDict = {};

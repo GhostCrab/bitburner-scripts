@@ -1,12 +1,7 @@
-/** @type import(".").NS */
-let ns = null;
-
 import { allHosts, setns, softenServer } from "./util.js";
 
-/** @param {NS} _ns **/
-export async function main(_ns) {
-    ns = _ns;
-
+/** @param {NS} ns **/
+export async function main(ns) {
     setns(ns)
 
     for (const hostName of allHosts()) {

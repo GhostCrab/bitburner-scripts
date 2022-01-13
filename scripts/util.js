@@ -95,3 +95,10 @@ export function doProgramBuys() {
 
     if (!ns.fileExists("SQLInject.exe", "home") && player.money > 250e6) ns.purchaseProgram("SQLInject.exe");
 }
+
+export function doBuyAndSoftenAll() {
+    doProgramBuys()
+    for (const hostname of allHosts()) {
+        softenServer(hostname);
+    }
+}

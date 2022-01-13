@@ -1,116 +1,34 @@
-/** @type import("./index.d").NS */
-let ns = null;
+import { allHosts, setns, softenServer } from "./util.js";
 
-function printServer(serverArg) {
-    let server = serverArg;
-    if (server instanceof String) server = ns.getServer(server);
+/** @param {import(".").NS } ns */
+function listServers(ns, hostnames) {
+    let hackableHosts = hostnames.sort((a, b) => ns.getServerMaxMoney(b) - ns.getServerMaxMoney(a));
 
-    let labelBuffer = 23;
-
-    ns.tprintf(server.hostname + ":");
-    ns.tprintf("  %23s: %s", "Root Access", server.hasAdminRights ? "TRUE" : "FALSE");
-    ns.tprintf("  %23s: %s", "Maximum Money", ns.nFormat(server.moneyMax, "($0.000a)"));
-    ns.tprintf(
-        "  %23s: %s/%s",
-        "Available Money",
-        ns.nFormat(server.moneyAvailable, "($0.000a)"),
-        ns.nFormat(server.moneyMax * 0.75, "($0.000a)")
-    );
-    ns.tprintf("  %23s: %.2f", "Hack Difficulty", server.hackDifficulty);
-    ns.tprintf("  %23s: %.2f%%", "Hack Chance", ns.hackAnalyzeChance(server.hostname) * 100);
-    ns.tprintf("  %23s: %d", "Hack Difficulty (MIN)", server.minDifficulty);
-    ns.tprintf("  %23s: %d", "Hack Difficulty (BASE)", server.baseDifficulty);
-    ns.tprintf("  %23s: %s", "Hacking Requirement", server.requiredHackingSkill);
-    // ns.tprintf("  %23s: %s", "Open Ports", server.openPortCount)
-    // ns.tprintf("  %23s: %s", "Open Ports Required", server.numOpenPortsRequired)
-    // ns.tprintf("  %23s: %s", "Maximum Ram", server.maxRam)
-}
-
-function serverValueSort(h1, h2) {
-    const s1 = ns.getServer(h1);
-    const s2 = ns.getServer(h2);
-
-    if (s1.moneyMax > s2.moneyMax) return -1;
-    if (s1.moneyMax < s2.moneyMax) return 1;
-    return 0;
-}
-
-async function hackHost(hostName, targetName) {
-    const hostServer = ns.getServer(hostName);
-    const targetServer = ns.getServer(targetName);
-
-    let hackMeRam = ns.getScriptRam("hack_me.js");
-    let hackThreads = Math.floor(hostServer.maxRam / hackMeRam);
-
-    if (hackThreads === 0) {
-        ns.tprint(hostName + " unable to execute hack_me.js (" + hostServer.maxRam + "/" + hackMeRam + ")");
-        return;
-    }
-
-    ns.tprint(
-        "Running hack_me.js on " +
-            hostName +
-            " on " +
-            hackThreads +
-            " threads, targeting " +
-            targetName +
-            " [" +
-            ns.nFormat(targetServer.moneyMax, "($0.000a)") +
-            "]"
-    );
-    ns.killall(hostName);
-    await ns.scp("hack_me.js", "home", hostName);
-    ns.exec("hack_me.js", hostName, hackThreads, targetName);
-}
-
-function listServers(hosts) {
-    let hostNames = Object.keys(hosts);
-    let hackableHosts = hostNames.sort(serverValueSort);
-
-    for (const hostName of hackableHosts) {
-        const server = ns.getServer(hostName);
-        const rootStr = server.hasAdminRights ? "[O]" : "[X]";
-        const hackStr = ns.getHackingLevel() >= server.requiredHackingSkill ? "[O]" : "[X]";
-        let trailStr = "";
-        // for (const i of hosts[hostName]) {
-        //     if (i === hosts[hostName][hosts[hostName].length - 1]) trailStr += `${i}`;
-        //     else trailStr += `${i}.`;
-        // }
+    for (const hostname of hackableHosts) {
+        const rootStr = ns.hasRootAccess(hostname) ? "[O]" : "[X]";
+        const hackStr = ns.getHackingLevel() >= ns.getServerRequiredHackingLevel(hostname) ? "[O]" : "[X]";
         ns.tprintf(
-            "%20s %-9s %4d %s %s %6d %.2f %s",
-            server.hostname,
-            ns.nFormat(server.moneyMax, "($0.000a)"),
-            server.requiredHackingSkill,
+            "%20s %-9s %4d %s %s %6dGB %5.2f",
+            hostname,
+            ns.nFormat(ns.getServerMaxMoney(hostname), "($0.000a)"),
+            ns.getServerRequiredHackingLevel(hostname),
             rootStr,
             hackStr,
-            server.maxRam,
-            Math.ceil(ns.getWeakenTime(server.hostname) / 1000) / 60,
-            trailStr
+            ns.getServerMaxRam(hostname),
+            Math.ceil(ns.getWeakenTime(hostname) / 1000) / 60
         );
     }
 }
 
-function mapHosts(hosts, parents, current) {
-    let newParents = parents.concat(current);
-    hosts[current] = newParents;
+/** @param {import(".").NS } ns */
+export async function main(ns) {
+    setns(ns)
 
-    let children = ns.scan(current).filter((element) => !parents.includes(element));
-    for (const child of children) {
-        mapHosts(hosts, newParents, child);
+    let hostnames = allHosts()
+
+    for (const hostname of hostnames) {
+        softenServer(hostname);
     }
-}
 
-/** @param {NS} _ns **/
-export async function main(_ns) {
-    ns = _ns;
-
-    let hosts = {};
-    mapHosts(hosts, [], "home");
-
-    listServers(hosts);
-
-    //await distributeHack(hostNames)
-
-    //let hackableHosts = hostNames.filter(serverIsHackable).sort(serverValueSort)
-    //printServer(ns.getServer(hackableHosts[0]))
+    listServers(ns, hostnames);
 }
