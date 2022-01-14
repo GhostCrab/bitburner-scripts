@@ -102,3 +102,17 @@ export function doBuyAndSoftenAll() {
         softenServer(hostname);
     }
 }
+
+export function cleanLogs() {
+    ns.disableLog("disableLog")
+    ns.disableLog("sleep")
+    ns.disableLog("exec")
+    ns.disableLog("getServerMaxRam")
+    ns.disableLog("getServerSecurityLevel")
+    ns.disableLog("getServerMinSecurityLevel")
+    ns.disableLog("getServerMaxMoney")
+    ns.disableLog("getHackingLevel")
+    ns.disableLog("getServerRequiredHackingLevel")
+    ns.disableLog("scan")
+    ns.disableLog("getServerMoneyAvailable")
+}

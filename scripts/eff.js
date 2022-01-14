@@ -7,8 +7,8 @@ async function calcHackRate(ns, hostname, targetname, ramAllowance, simMinutes =
     env.simEnabled = true;
 
     // simulate for 10 minutes
-    ns.tprintf("Running fastSim on %s=>%s", env.hostname, env.targetname)
-    await env.fastSim(ns, 1000 * 60 * simMinutes);
+    //ns.tprintf("Running fastSim on %s=>%s", env.hostname, env.targetname)
+    let income = await env.fastSim(ns, 1000 * 60 * simMinutes);
 
     // ns.tprintf(
     //     "Running Hack Rate on %s=>%s (%.2fGB Ram Allowance): %s/s",
@@ -18,7 +18,7 @@ async function calcHackRate(ns, hostname, targetname, ramAllowance, simMinutes =
     //     ns.nFormat(env.simIncome / (env.simTime / 1000), "($0.000a)")
     // );
 
-    return env.simIncome / (env.simTime / 1000);
+    return income;
 }
 
 /** @param {import("./index.d").NS } ns */

@@ -146,8 +146,8 @@ export class SuperHackEnv {
         this.hosts.map((x) => (this.maxThreads += x.maxThreads), this);
 
         // if (debug) {
-        //     this.hosts.map((x) => ns.tprintf("  %32s: %d", x.hostname, x.maxThreads));
-        //     ns.tprintf("Max Threads: %d", this.maxThreads);
+        //     this.hosts.map((x) => ns.print(ns.sprintf("  %32s: %d", x.hostname, x.maxThreads));
+        //     ns.print(ns.sprintf("Max Threads: %d", this.maxThreads);
         // }
     }
 
@@ -315,42 +315,42 @@ export class SuperHackEnv {
         if (debug) {
             switch (this.state) {
                 case HackState.W:
-                    ns.tprintf(
-                        "WEAKEN: %s => Lowered Security from %.2f to %.2f (min: %.2f); Total Threads %d",
+                    ns.print(ns.sprintf(
+                        "WEAKEN: %s => Lowered Security from %.2f to %.2f (min: %.2f); Total Threads %s",
                         this.targetname,
                         this.weakenStartSec,
-                        this.getServerSecurityLevel(ns),
-                        ns.getServerMinSecurityLevel(this.targetname),
+                        this.getServerSecurityLevel(ns)?this.getServerSecurityLevel(ns):0,
+                        ns.getServerMinSecurityLevel(this.targetname)?ns.getServerMinSecurityLevel(this.targetname):0,
                         this.threadsPerCycle
-                    );
+                    ));
                     break;
                 case HackState.GW:
-                    ns.tprintf(
+                    ns.print(ns.sprintf(
                         "GROW-WEAKEN: %s => Grow %d; Weaken %d; Total Threads %d",
                         this.targetname,
                         this.growThreads,
                         this.weakenThreadsGrow,
                         this.threadsPerCycle
-                    );
-                    ns.tprintf(
+                    ));
+                    ns.print(ns.sprintf(
                         "GROW-WEAKEN: %s => Increased available money from %s to %s/%s [Sec: %.2f]",
                         this.targetname,
                         ns.nFormat(this.growStartMoney, "($0.000a)"),
                         ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
                         ns.nFormat(this.highMoney, "($0.000a)"),
                         this.getServerSecurityLevel(ns)
-                    );
+                    ));
                     break;
                 case HackState.HW:
                     let totalHack = this.hackStartMoney - this.getServerMoneyAvailable(ns);
-                    ns.tprintf(
+                    ns.print(ns.sprintf(
                         "HACK-WEAKEN: %s => Hack %d; Weaken %d; Total Threads %d",
                         this.targetname,
                         this.hackThreads,
                         this.weakenThreadsHack,
                         this.threadsPerCycle
-                    );
-                    ns.tprintf(
+                    ));
+                    ns.print(ns.sprintf(
                         "HACK-WEAKEN: %s => Decreased available money from %s to %s; %s Total (%.2f%% of max) [Sec: %.2f]",
                         this.targetname,
                         ns.nFormat(this.hackStartMoney, "($0.000a)"),
@@ -358,10 +358,10 @@ export class SuperHackEnv {
                         ns.nFormat(totalHack, "($0.000a)"),
                         (totalHack / ns.getServerMaxMoney(this.targetname)) * 100,
                         this.getServerSecurityLevel(ns)
-                    );
+                    ));
                     break;
                 case HackState.HGW:
-                    ns.tprintf(
+                    ns.print(ns.sprintf(
                         "HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d",
                         this.targetname,
                         this.hackThreads,
@@ -372,15 +372,15 @@ export class SuperHackEnv {
                         this.threadsPerCycle * this.cycleTotal,
                         this.cycleTotal,
                         this.cycleMax
-                    );
-                    ns.tprintf(
+                    ));
+                    ns.print(ns.sprintf(
                         "HACK-GROW-WEAKEN: %s => Cycle Complete; %s Available; Hacked %s (%.2f%% of max) [Sec: %.2f]",
                         this.targetname,
                         ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
                         ns.nFormat(this.hackTotal, "($0.000a)"),
                         (this.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
                         this.getServerSecurityLevel(ns)
-                    );
+                    ));
                     break;
                 default:
                     // Do Nothing
@@ -679,7 +679,7 @@ export class SuperHackEnv {
             }
         }
 
-        ns.tprintf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script);
+        ns.print(ns.sprintf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script));
         return false;
     }
 
@@ -706,7 +706,7 @@ export class SuperHackEnv {
 
             this.simTime += this.weakenTime;
 
-            ns.tprintf("WEAKEN: Sim Time: %s", ns.tFormat(this.simTime, true));
+            ns.print(ns.sprintf("WEAKEN: Sim Time: %s", ns.tFormat(this.simTime, true)));
             return;
         }
 
@@ -739,7 +739,7 @@ export class SuperHackEnv {
 
             this.simTime += this.weakenTime + this.tspacer;
 
-            ns.tprintf("GROW-WEAKEN: Sim Time: %s", ns.tFormat(this.simTime, true));
+            ns.print(ns.sprintf("GROW-WEAKEN: Sim Time: %s", ns.tFormat(this.simTime, true)));
 
             return;
         }
@@ -772,12 +772,12 @@ export class SuperHackEnv {
             this.simTime += this.weakenTime;
             this.simIncome += hackTotal;
 
-            ns.tprintf(
+            ns.print(ns.sprintf(
                 "HACK-WEAKEN: Sim Time: %s; Sim Income: %s (%s/s)",
                 ns.tFormat(this.simTime, true),
                 ns.nFormat(this.simIncome, "($0.000a)"),
                 ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)")
-            );
+            ));
 
             return;
         }
@@ -834,12 +834,12 @@ export class SuperHackEnv {
             this.simTime += this.cycleBatchTime + this.tspacer;
             this.simIncome += hackTotal;
 
-            ns.tprintf(
+            ns.print(ns.sprintf(
                 "HACK-GROW-WEAKEN: Sim Time: %s; Sim Income: %s (%s/s)",
                 ns.tFormat(this.simTime, true),
                 ns.nFormat(this.simIncome, "($0.000a)"),
                 ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)")
-            );
+            ));
 
             return;
         }
@@ -904,7 +904,7 @@ export class SuperHackEnv {
 
             this.simTime += this.weakenTime + this.tspacer;
 
-            // ns.tprintf(
+            // ns.print(ns.sprintf(
             //     "WEAKEN: Fast Sim Time: %s (%s + %s)",
             //     ns.tFormat(this.simTime, true),
             //     ns.tFormat(this.weakenTime, true),
@@ -926,7 +926,7 @@ export class SuperHackEnv {
             this.simTime += this.weakenTime + this.tspacer;
             this.simTarget.hackDifficulty = this.simTarget.minDifficulty;
 
-            // ns.tprintf(
+            // ns.print(ns.sprintf(
             //     "GROW-WEAKEN: Fast Sim Time: %s (%s + %s)",
             //     ns.tFormat(this.simTime, true),
             //     ns.tFormat(this.weakenTime, true),
@@ -952,7 +952,7 @@ export class SuperHackEnv {
             this.simTime += hackCycles * hwTime;
             this.simIncome += hackCycles * hwTotal;
 
-            // ns.tprintf(
+            // ns.print(ns.sprintf(
             //     "HACK-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
             //     ns.tFormat(this.simTime, true),
             //     ns.nFormat(this.simIncome, "($0.000a)"),
@@ -965,7 +965,7 @@ export class SuperHackEnv {
             this.simTime += hackCycles * hgwTime;
             this.simIncome += hackCycles * hgwTotal;
 
-            // ns.tprintf(
+            // ns.print(ns.sprintf(
             //     "HACK-GROW-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
             //     ns.tFormat(this.simTime, true),
             //     ns.nFormat(this.simIncome, "($0.000a)"),

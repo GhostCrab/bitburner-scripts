@@ -192,7 +192,8 @@ export async function main(ns) {
     allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price);
 
     for (let aug of allPurchaseableAugs) {
-        ns.purchaseAugmentation(aug.faction, aug.name)
+        if (ns.args[0])
+            ns.purchaseAugmentation(aug.faction, aug.name)
         ns.tprintf("%s", aug);
     }
 }
