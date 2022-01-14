@@ -289,6 +289,72 @@ export class SuperHackEnv {
             return;
         }
 
+        if (debug) {
+            switch (this.state) {
+                case HackState.W:
+                    ns.print(
+                        ns.sprintf(
+                            "%8s WEAKEN: %s => Lowered Security from %.2f to %.2f (min: %.2f); Total Threads %s",
+                            new Date().toLocaleTimeString('it-IT'),
+                            this.targetname,
+                            this.weakenStartSec,
+                            this.getServerSecurityLevel(ns) ? this.getServerSecurityLevel(ns) : 0,
+                            ns.getServerMinSecurityLevel(this.targetname)
+                                ? ns.getServerMinSecurityLevel(this.targetname)
+                                : 0,
+                            this.threadsPerCycle
+                        )
+                    );
+                    break;
+                case HackState.GW:
+                    ns.print(
+                        ns.sprintf(
+                            "%8s GROW-WEAKEN: %s => Increased available money from %s to %s/%s [Sec: %.2f]",
+                            new Date().toLocaleTimeString('it-IT'),
+                            this.targetname,
+                            ns.nFormat(this.growStartMoney, "($0.000a)"),
+                            ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
+                            ns.nFormat(this.highMoney, "($0.000a)"),
+                            this.getServerSecurityLevel(ns)
+                        )
+                    );
+                    break;
+                case HackState.HW:
+                    let totalHack = this.hackStartMoney - this.getServerMoneyAvailable(ns);
+                    ns.print(
+                        ns.sprintf(
+                            "%8s HACK-WEAKEN: %s => Decreased available money from %s to %s; %s Total (%.2f%% of max) [Sec: %.2f]",
+                            new Date().toLocaleTimeString('it-IT'),
+                            this.targetname,
+                            ns.nFormat(this.hackStartMoney, "($0.000a)"),
+                            ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
+                            ns.nFormat(totalHack, "($0.000a)"),
+                            (totalHack / ns.getServerMaxMoney(this.targetname)) * 100,
+                            this.getServerSecurityLevel(ns)
+                        )
+                    );
+                    break;
+                case HackState.HGW:
+                    ns.print(
+                        ns.sprintf(
+                            "%8s HACK-GROW-WEAKEN: %s => Cycle Complete; %s Available; Hacked %s/%s (%.2f%%/%.2f%% of max) [Sec: %.2f]",
+                            new Date().toLocaleTimeString('it-IT'),
+                            this.targetname,
+                            ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
+                            ns.nFormat(this.hackTotal, "($0.000a)"),
+                            ns.nFormat(this.hackTotal * this.cycleTotal, "($0.000a)"),
+                            (this.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
+                            ((this.hackTotal * this.cycleTotal) / ns.getServerMaxMoney(this.targetname)) * 100,
+                            this.getServerSecurityLevel(ns)
+                        )
+                    );
+                    break;
+                default:
+                    // Do Nothing
+                    break;
+            }
+        }
+
         this.setState(ns);
         switch (this.state) {
             case HackState.W:
@@ -310,82 +376,6 @@ export class SuperHackEnv {
                 break;
             default:
             // Do Nothing
-        }
-
-        if (debug) {
-            switch (this.state) {
-                case HackState.W:
-                    ns.print(ns.sprintf(
-                        "WEAKEN: %s => Lowered Security from %.2f to %.2f (min: %.2f); Total Threads %s",
-                        this.targetname,
-                        this.weakenStartSec,
-                        this.getServerSecurityLevel(ns)?this.getServerSecurityLevel(ns):0,
-                        ns.getServerMinSecurityLevel(this.targetname)?ns.getServerMinSecurityLevel(this.targetname):0,
-                        this.threadsPerCycle
-                    ));
-                    break;
-                case HackState.GW:
-                    ns.print(ns.sprintf(
-                        "GROW-WEAKEN: %s => Grow %d; Weaken %d; Total Threads %d",
-                        this.targetname,
-                        this.growThreads,
-                        this.weakenThreadsGrow,
-                        this.threadsPerCycle
-                    ));
-                    ns.print(ns.sprintf(
-                        "GROW-WEAKEN: %s => Increased available money from %s to %s/%s [Sec: %.2f]",
-                        this.targetname,
-                        ns.nFormat(this.growStartMoney, "($0.000a)"),
-                        ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
-                        ns.nFormat(this.highMoney, "($0.000a)"),
-                        this.getServerSecurityLevel(ns)
-                    ));
-                    break;
-                case HackState.HW:
-                    let totalHack = this.hackStartMoney - this.getServerMoneyAvailable(ns);
-                    ns.print(ns.sprintf(
-                        "HACK-WEAKEN: %s => Hack %d; Weaken %d; Total Threads %d",
-                        this.targetname,
-                        this.hackThreads,
-                        this.weakenThreadsHack,
-                        this.threadsPerCycle
-                    ));
-                    ns.print(ns.sprintf(
-                        "HACK-WEAKEN: %s => Decreased available money from %s to %s; %s Total (%.2f%% of max) [Sec: %.2f]",
-                        this.targetname,
-                        ns.nFormat(this.hackStartMoney, "($0.000a)"),
-                        ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
-                        ns.nFormat(totalHack, "($0.000a)"),
-                        (totalHack / ns.getServerMaxMoney(this.targetname)) * 100,
-                        this.getServerSecurityLevel(ns)
-                    ));
-                    break;
-                case HackState.HGW:
-                    ns.print(ns.sprintf(
-                        "HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d",
-                        this.targetname,
-                        this.hackThreads,
-                        this.growThreads,
-                        this.weakenThreadsHack,
-                        this.weakenThreadsGrow,
-                        this.threadsPerCycle,
-                        this.threadsPerCycle * this.cycleTotal,
-                        this.cycleTotal,
-                        this.cycleMax
-                    ));
-                    ns.print(ns.sprintf(
-                        "HACK-GROW-WEAKEN: %s => Cycle Complete; %s Available; Hacked %s (%.2f%% of max) [Sec: %.2f]",
-                        this.targetname,
-                        ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
-                        ns.nFormat(this.hackTotal, "($0.000a)"),
-                        (this.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
-                        this.getServerSecurityLevel(ns)
-                    ));
-                    break;
-                default:
-                    // Do Nothing
-                    break;
-            }
         }
     }
 
@@ -503,8 +493,6 @@ export class SuperHackEnv {
 
     /** @param {import(".").NS } ns */
     updateForHGW(ns) {
-        console.time(`updateForHGW ${this.targetname}`);
-        console.time(`updateForHGW PRE ${this.targetname}`);
         // Target Info
         this.targetMoneyAvailable = this.getServerMoneyAvailable(ns);
         this.targetSec = this.getServerSecurityLevel(ns);
@@ -543,7 +531,6 @@ export class SuperHackEnv {
         this.cycleMax = Math.floor((this.cycleFitTime - hackStartTime) / this.cycleSpacer) + 1;
 
         this.threadsPerCycle = this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
-        console.timeEnd(`updateForHGW PRE ${this.targetname}`);
 
         let hackReduceCounter = 0;
         let setCycle = function () {
@@ -578,7 +565,7 @@ export class SuperHackEnv {
             }
 
             while (this.threadsPerCycle > cycleThreadAllowance) {
-                hackReduceCounter++
+                hackReduceCounter++;
                 this.hackThreads--;
 
                 if (this.hackThreads <= 0) return 0;
@@ -603,7 +590,6 @@ export class SuperHackEnv {
 
         let cycleIncomes = new Array(this.cycleMax + 1);
 
-        console.time(`updateForHGW Cycle Max Calc ${this.targetname}`);
         // find first cycle counting down from the top where income > 0, since the algorithm doesnt like
         // flat lines and any cylcle count that results in a ram allocation less than a threshold automatically
         // returns 0
@@ -615,10 +601,6 @@ export class SuperHackEnv {
             if (cycleIncomes[cycleMax] > 0) break;
         }
         cycleMax++;
-
-        console.timeEnd(`updateForHGW Cycle Max Calc ${this.targetname}`);
-
-        console.time(`updateForHGW Cycle Target Calc ${this.targetname}`);
 
         // find local maximum of cycleIncomes
         // target center value,
@@ -662,11 +644,7 @@ export class SuperHackEnv {
 
         this.cycleTotal = cycleTarget;
         setCycle();
-        console.log(`${this.targetname} cycleSearch: ${cycleSearch}; hackReduceCounter: ${hackReduceCounter}`);
 
-        console.timeEnd(`updateForHGW Cycle Target Calc ${this.targetname}`);
-
-        console.timeEnd(`updateForHGW ${this.targetname}`);
         return this.cycleTotal === 1 ? this.hackThreads >= hackThreadsFull : true;
     }
 
@@ -679,7 +657,9 @@ export class SuperHackEnv {
             }
         }
 
-        ns.print(ns.sprintf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script));
+        ns.print(
+            ns.sprintf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script)
+        );
         return false;
     }
 
@@ -713,6 +693,18 @@ export class SuperHackEnv {
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreads);
         this.execute(ns);
         this.resetThreads();
+
+        if (debug) {
+            ns.print(
+                ns.sprintf(
+                    "%8s WEAKEN: %s => Weaken %d; Time %s",
+                    new Date().toLocaleTimeString('it-IT'),
+                    this.targetname,
+                    this.weakenThreads,
+                    ns.tFormat(this.weakenTime)
+                )
+            );
+        }
     }
 
     /** @param {import(".").NS } ns */
@@ -750,6 +742,20 @@ export class SuperHackEnv {
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsGrow);
         this.execute(ns);
         this.resetThreads();
+
+        if (debug) {
+            ns.print(
+                ns.sprintf(
+                    "%8s GROW-WEAKEN: %s => Grow %d; Weaken %d; Total Threads %d; Time %s",
+                    new Date().toLocaleTimeString('it-IT'),
+                    this.targetname,
+                    this.growThreads,
+                    this.weakenThreadsGrow,
+                    this.threadsPerCycle,
+                    ns.tFormat(this.weakenTime)
+                )
+            );
+        }
     }
 
     /** @param {import(".").NS } ns */
@@ -772,12 +778,14 @@ export class SuperHackEnv {
             this.simTime += this.weakenTime;
             this.simIncome += hackTotal;
 
-            ns.print(ns.sprintf(
-                "HACK-WEAKEN: Sim Time: %s; Sim Income: %s (%s/s)",
-                ns.tFormat(this.simTime, true),
-                ns.nFormat(this.simIncome, "($0.000a)"),
-                ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)")
-            ));
+            ns.print(
+                ns.sprintf(
+                    "HACK-WEAKEN: Sim Time: %s; Sim Income: %s (%s/s)",
+                    ns.tFormat(this.simTime, true),
+                    ns.nFormat(this.simIncome, "($0.000a)"),
+                    ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)")
+                )
+            );
 
             return;
         }
@@ -788,6 +796,19 @@ export class SuperHackEnv {
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack);
         this.execute(ns);
         this.resetThreads();
+        if (debug) {
+            ns.print(
+                ns.sprintf(
+                    "%8s HACK-WEAKEN: %s => Hack %d; Weaken %d; Total Threads %d; Time %s",
+                    new Date().toLocaleTimeString('it-IT'),
+                    this.targetname,
+                    this.hackThreads,
+                    this.weakenThreadsHack,
+                    this.threadsPerCycle,
+                    ns.tFormat(this.weakenTime)
+                )
+            );
+        }
     }
 
     /** @param {import(".").NS } ns */
@@ -834,12 +855,14 @@ export class SuperHackEnv {
             this.simTime += this.cycleBatchTime + this.tspacer;
             this.simIncome += hackTotal;
 
-            ns.print(ns.sprintf(
-                "HACK-GROW-WEAKEN: Sim Time: %s; Sim Income: %s (%s/s)",
-                ns.tFormat(this.simTime, true),
-                ns.nFormat(this.simIncome, "($0.000a)"),
-                ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)")
-            ));
+            ns.print(
+                ns.sprintf(
+                    "HACK-GROW-WEAKEN: Sim Time: %s; Sim Income: %s (%s/s)",
+                    ns.tFormat(this.simTime, true),
+                    ns.nFormat(this.simIncome, "($0.000a)"),
+                    ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)")
+                )
+            );
 
             return;
         }
@@ -864,6 +887,25 @@ export class SuperHackEnv {
 
         this.execute(ns);
         this.resetThreads();
+
+        if (debug) {
+            ns.print(
+                ns.sprintf(
+                    "%8s HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time %s",
+                    new Date().toLocaleTimeString('it-IT'),
+                    this.targetname,
+                    this.hackThreads,
+                    this.growThreads,
+                    this.weakenThreadsHack,
+                    this.weakenThreadsGrow,
+                    this.threadsPerCycle,
+                    this.threadsPerCycle * this.cycleTotal,
+                    this.cycleTotal,
+                    this.cycleMax,
+                    ns.tFormat(this.cycleBatchTime)
+                )
+            );
+        }
     }
 
     /** @param {import(".").NS } ns */
