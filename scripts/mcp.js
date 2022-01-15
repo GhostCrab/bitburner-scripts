@@ -1,4 +1,3 @@
-/** @type import(".").NS */
 import { setns, mapHosts, doBuyAndSoftenAll } from "./util.js";
 
 function printAugStats(ns, stats) {
@@ -113,7 +112,7 @@ async function doBackdoors(ns) {
     }
 }
 
-/** @param {NS} _ns **/
+/** @param {import(".").NS } ns */
 export async function main(ns) {
     setns(ns);
 
@@ -161,7 +160,8 @@ export async function main(ns) {
         // "Church of the Machine God",
     ];
 
-    let sortedFactions = player.factions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    let checkFactions = player.factions.concat(ns.checkFactionInvitations())
+    let sortedFactions = checkFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
 
     let allPurchaseableAugs = [];
     for (let faction of sortedFactions) {

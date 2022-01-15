@@ -115,4 +115,5 @@ export function cleanLogs() {
     ns.disableLog("getServerRequiredHackingLevel")
     ns.disableLog("scan")
     ns.disableLog("getServerMoneyAvailable")
+    ns.disableLog("getServerUsedRam")
 }
