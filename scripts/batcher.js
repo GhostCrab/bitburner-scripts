@@ -1,27 +1,7 @@
 import { setns, cleanLogs } from "./util.js";
 import { SuperHackEnv } from "./super_hack_env.js";
-/*
-10:55:55: Attacking hong-fang-tea (Hacking EXP: 9421984.21)
-10:55:55: Weakening on 18680 threads for 1 minutes 3 seconds, gaining 212841.99 Hacking EXP
-10:56:59: hong-fang-tea fully weakened (Hacking EXP: 9634897.76)
-10:56:59: WARNING: Current EXP 9634897.76 is not equal to Expected EXP 9634826.20 (diff: 71.56)
-10:56:59: Growing on 17296/1384 threads for 34 seconds, gaining 212841.9921462314 Hacking EXP
-10:57:34: hong-fang-tea available money maxed out (Hacking EXP: 9847778.21)
-10:57:34: WARNING: Current EXP 9847778.21 is not equal to Expected EXP 9847739.75 (diff: 38.46)
 
-10:58:36: Attacking sigma-cosmetics (Hacking EXP: 9847847.98)
-10:58:36: Weakening on 18680 threads for 24 seconds, gaining 160574.66 Hacking EXP
-10:59:01: sigma-cosmetics fully weakened (Hacking EXP: 10008449.93)
-10:59:01: WARNING: Current EXP 10008449.93 is not equal to Expected EXP 10008422.64 (diff: 27.28)
-10:59:01: Growing on 17296/1384 threads for 20 seconds, gaining 160574.66143082094 Hacking EXP
-10:59:22: sigma-cosmetics available money maxed out (Hacking EXP: 10169048.29)
-10:59:22: WARNING: Current EXP 10169048.29 is not equal to Expected EXP 10169024.59 (diff: 23.70)
-
-
-
-
-
-*/
+var DEBUG_OUTPUT = false;
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
@@ -36,7 +16,7 @@ export async function main(ns) {
     const hackScript = "hack.js";
     const growScript = "grow.js";
     const weakenScript = "weaken.js";
-    const targetname = "harakiri-sushi";
+    const targetname = ns.args[0];
     const hostname = "home";
     const hostCores = ns.getServer(hostname).cores;
     const hackRam = ns.getScriptRam(hackScript);
@@ -106,9 +86,16 @@ export async function main(ns) {
 
     ns.print(`${new Date().toLocaleTimeString("it-IT")}: ${targetname} available money maxed out`);
 
-	return
-
     let bst = Date.now();
+    const dataOut = `${bst}_${targetname}.txt`;
+
+    if (DEBUG_OUTPUT) {
+        await ns.write(
+            dataOut,
+            "Target Name, UID, Batch ID, Offset Time, Start Time, End Time, Operation Time, Real Time Start, Real Time End, Real Time Operation, Diff, Exp Gain\n",
+            "w"
+        );
+    }
 
     // return true if no processes are finishing within startbuf and endbuf
     let isProcessStartSafe = function (ps, startbuf, endbuf) {
@@ -120,21 +107,37 @@ export async function main(ns) {
         return true;
     };
 
+    let env = new SuperHackEnv(ns, targetname, [hostname]);
+    let optimalHackPercent = env.optimalHackPercent(ns);
+    let optimalLevelCheck = ns.getPlayer().hacking;
+    const optimalTimerReset = 30 * 1000;
+    let optimalTimer = optimalTimerReset;
+    let batchID = 0;
+    const batchSleep = 20;
     // BATCH!
     while (true) {
-        await ns.sleep(200);
+        await ns.sleep(batchSleep);
+
+        if ((optimalTimer -= batchSleep <= 0)) {
+            optimalTimer = optimalTimerReset;
+            if (optimalLevelCheck != ns.getPlayer().hacking) {
+                optimalLevelCheck = ns.getPlayer().hacking;
+                optimalHackPercent = env.optimalHackPercent(ns);
+                ns.print(`Optimal Hack Percent set to ${(optimalHackPercent * 100).toFixed(2)}%`);
+            }
+        }
 
         let currentTime = Date.now() - bst;
 
         // collect all running HGW threads
         let ps = ns.ps(hostname);
 
-        // if any processes are going to finish in the next 200ms, wait 200ms and try again
-        if (!isProcessStartSafe(ps, currentTime, currentTime + 200)) continue;
+        // if any processes are going to finish in the next 150 ms, wait 150 ms and try again
+        if (!isProcessStartSafe(ps, currentTime, currentTime + 150)) continue;
 
         // The state of the player when both weakens are called (in the next 0 and 50 ms) should not change,
         // so getting weaken time unmodified should be fine
-        let weakenTime = ns.getWeakenTime(targetname);
+        let weakenTime = Math.ceil(ns.getWeakenTime(targetname));
         let weakenHackOffsetTime = 0;
         let weakenGrowOffsetTime = tspacer * 2;
 
@@ -145,12 +148,12 @@ export async function main(ns) {
 
         // calculate grow time when grow is supposed to start
         let growPlayer = ns.getPlayer();
-        let growServer = ns.getServer();
+        let growServer = ns.getServer(targetname);
         let growTime, growOffsetTime, growStartTime;
         let oldGrowStartTime = currentTime;
 
         while (true) {
-            growTime = ns.formulas.hacking.growTime(growServer, growPlayer);
+            growTime = Math.ceil(ns.formulas.hacking.growTime(growServer, growPlayer));
             growOffsetTime = weakenTime + tspacer - growTime;
             growStartTime = currentTime + growOffsetTime;
 
@@ -189,12 +192,12 @@ export async function main(ns) {
 
         // calculate hack time when hack is supposed to start
         let hackPlayer = ns.getPlayer();
-        let hackServer = ns.getServer();
+        let hackServer = ns.getServer(targetname);
         let hackTime, hackOffsetTime, hackStartTime;
         let oldHackStartTime = currentTime;
 
         while (true) {
-            hackTime = ns.formulas.hacking.hackTime(hackServer, hackPlayer);
+            hackTime = Math.ceil(ns.formulas.hacking.hackTime(hackServer, hackPlayer));
             hackOffsetTime = weakenTime - hackTime - tspacer;
             hackStartTime = currentTime + hackOffsetTime;
 
@@ -236,8 +239,7 @@ export async function main(ns) {
         const hackPercentPerThread = ns.formulas.hacking.hackPercent(hackServer, hackPlayer);
         const targetMaxMoney = ns.getServerMaxMoney(targetname);
 
-        // hard code hack thread target being 50% of target's max money
-        let hackThreads = 0.5 / hackPercentPerThread - 1;
+        let hackThreads = optimalHackPercent / hackPercentPerThread;
         let hackTotal = hackPercentPerThread * hackThreads * targetMaxMoney;
 
         let growMult = targetMaxMoney / (targetMaxMoney - hackTotal);
@@ -254,7 +256,7 @@ export async function main(ns) {
         // check if there is ram available to run the cycle
         if (hostRamAvailable() < cycleRam) continue;
 
-		let hackEXP = ns.formulas.hacking.hackExp(ns.getServer(targetname), ns.getPlayer());
+        let hackEXP = ns.formulas.hacking.hackExp(ns.getServer(targetname), ns.getPlayer());
 
         // args are targetname, offset, ms since aug when process will start, ms since aug when process will end, exp gain
         let weakenArgsHack = [
@@ -263,6 +265,10 @@ export async function main(ns) {
             currentTime + weakenHackOffsetTime,
             currentTime + weakenTime + weakenHackOffsetTime,
             hackEXP * weakenThreadsHack,
+            batchID,
+            DEBUG_OUTPUT ? dataOut : false,
+            bst,
+            "0WH",
         ];
 
         let weakenArgsGrow = [
@@ -271,6 +277,10 @@ export async function main(ns) {
             currentTime + weakenGrowOffsetTime,
             currentTime + weakenTime + weakenGrowOffsetTime,
             hackEXP * weakenThreadsGrow,
+            batchID,
+            DEBUG_OUTPUT ? dataOut : false,
+            bst,
+            "1WG",
         ];
 
         let growArgs = [
@@ -279,6 +289,10 @@ export async function main(ns) {
             currentTime + growOffsetTime,
             currentTime + growTime + growOffsetTime,
             hackEXP * growThreads,
+            batchID,
+            DEBUG_OUTPUT ? dataOut : false,
+            bst,
+            "2G",
         ];
 
         let hackArgs = [
@@ -287,13 +301,43 @@ export async function main(ns) {
             currentTime + hackOffsetTime,
             currentTime + hackTime + hackOffsetTime,
             hackEXP * hackThreads,
+            batchID,
+            DEBUG_OUTPUT ? dataOut : false,
+            bst,
+            "3H",
         ];
 
-        ns.print(`${new Date().toLocaleTimeString("it-IT")}: Starting Batch Cycle at ${ns.tFormat(currentTime, true)}`);
+        ns.print(
+            ns.sprintf(
+                "%8s HACK-GROW-WEAKEN: %s => Starting Batch Cycle; Hacking %s (%.2f%% of max)",
+                new Date().toLocaleTimeString("it-IT"),
+                targetname,
+                ns.nFormat(hackTotal, "($0.000a)"),
+                (hackTotal / ns.getServerMaxMoney(targetname)) * 100
+            )
+        );
+        ns.print(
+            ns.sprintf(
+                "%8s HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d; Time %s",
+                new Date().toLocaleTimeString("it-IT"),
+                targetname,
+                hackThreads,
+                growThreads,
+                weakenThreadsHack,
+                weakenThreadsGrow,
+                hackThreads + growThreads + weakenThreadsHack + weakenThreadsGrow,
+                ns.tFormat(weakenTime)
+            )
+        );
 
         ns.exec(weakenScript, hostname, weakenThreadsHack, ...weakenArgsHack);
         ns.exec(weakenScript, hostname, weakenThreadsGrow, ...weakenArgsGrow);
         ns.exec(growScript, hostname, growThreads, ...growArgs);
         ns.exec(hackScript, hostname, hackThreads, ...hackArgs);
+
+        batchID++;
+
+        // Allow space for interleaving batches
+        await ns.sleep(300 - batchSleep)
     }
 }

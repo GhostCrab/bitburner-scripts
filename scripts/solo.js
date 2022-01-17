@@ -38,12 +38,13 @@ export async function main(ns) {
     }
 
     if (ns.args[1]) {
-        let env = new SuperHackEnv(ns, orderedTargetArr[0][0], allHostnames.filter(canExecuteOnServer))
+        //let env = new SuperHackEnv(ns, orderedTargetArr[0][0], allHostnames.filter(canExecuteOnServer))
+        let env = new SuperHackEnv(ns, orderedTargetArr[0][0], ["home"])
         await env.init(ns)
 
         while (true) {
             env.refresh(ns)
-            await ns.sleep(20)
+            await ns.sleep(2000)
         }
     }
 }

@@ -1,5 +1,5 @@
-export const debug = true;
-export const TSPACER = 50;
+export const debug = false;
+export const TSPACER = 100;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
@@ -52,10 +52,22 @@ class Host {
         return newThreadCount;
     }
 
+    tryReserveThreadsExtended(ns, script, threads, args) {
+        let reservedThreadCount = this.getReservedThreadCount();
+
+        if (reservedThreadCount === this.maxThreads) return 0;
+
+        let newThreadCount = Math.min(this.maxThreads - reservedThreadCount, threads);
+        this.reservedScriptCalls.push({ script: script, threads: newThreadCount, args: args });
+
+        return newThreadCount;
+    }
+
     /** @param {import(".").NS } ns */
     executeScripts(ns, target) {
         for (const scriptCall of this.reservedScriptCalls) {
-            ns.exec(scriptCall.script, this.hostname, scriptCall.threads, target, scriptCall.offset);
+            if ("args" in scriptCall) ns.exec(scriptCall.script, this.hostname, scriptCall.threads, ...scriptCall.args);
+            else ns.exec(scriptCall.script, this.hostname, scriptCall.threads, target, scriptCall.offset);
         }
     }
 
@@ -133,6 +145,12 @@ export class SuperHackEnv {
         this.simTime = 0;
         this.simIncome = 0;
         this.simForceState = HackState.UNSET;
+
+        // Debug Info
+        this.bst = Date.now();
+        this.currentTime = this.bst;
+        this.batchID = 0;
+        this.dataFile = false ? `${this.bst}_${this.targetname}.txt` : false;
     }
 
     updateHosts(ns, hostnames) {
@@ -146,13 +164,22 @@ export class SuperHackEnv {
         this.hosts.map((x) => (this.maxThreads += x.maxThreads), this);
 
         // if (debug) {
-        //     this.hosts.map((x) => ns.print(ns.sprintf("  %32s: %d", x.hostname, x.maxThreads));
-        //     ns.print(ns.sprintf("Max Threads: %d", this.maxThreads);
+        //     ns.print(ns.sprintf("Max Threads: %d", this.maxThreads));
         // }
     }
 
     async init(ns, force = false) {
         for (const host of this.hosts) await host.prep(ns, force);
+
+        if (this.dataFile) {
+            await ns.write(
+                this.dataFile,
+                "Target Name, UID, Batch ID, Offset Time, Start Time, " +
+                    "End Time, Operation Time, Real Time Start, Real Time End, " +
+                    "Real Time Operation, Diff, Exp Gain\n",
+                "w"
+            );
+        }
     }
 
     resetSim(ns) {
@@ -205,21 +232,21 @@ export class SuperHackEnv {
 
     /** @param {import(".").NS } ns */
     getWeakenTime(ns) {
-        if (this.simEnabled) return ns.formulas.hacking.weakenTime(this.simTarget, this.simPlayer);
+        if (this.simEnabled) return Math.ceil(ns.formulas.hacking.weakenTime(this.simTarget, this.simPlayer));
 
-        return ns.getWeakenTime(this.targetname);
+        return Math.ceil(ns.getWeakenTime(this.targetname));
     }
 
     getGrowTime(ns) {
-        if (this.simEnabled) return ns.formulas.hacking.growTime(this.simTarget, this.simPlayer);
+        if (this.simEnabled) return Math.ceil(ns.formulas.hacking.growTime(this.simTarget, this.simPlayer));
 
-        return ns.getGrowTime(this.targetname);
+        return Math.ceil(ns.getGrowTime(this.targetname));
     }
 
     getHackTime(ns) {
-        if (this.simEnabled) return ns.formulas.hacking.hackTime(this.simTarget, this.simPlayer);
+        if (this.simEnabled) return Math.ceil(ns.formulas.hacking.hackTime(this.simTarget, this.simPlayer));
 
-        return ns.getHackTime(this.targetname);
+        return Math.ceil(ns.getHackTime(this.targetname));
     }
 
     hackAnalyze(ns) {
@@ -289,70 +316,68 @@ export class SuperHackEnv {
             return;
         }
 
-        if (debug) {
-            switch (this.state) {
-                case HackState.W:
-                    ns.print(
-                        ns.sprintf(
-                            "%8s WEAKEN: %s => Lowered Security from %.2f to %.2f (min: %.2f); Total Threads %s",
-                            new Date().toLocaleTimeString('it-IT'),
-                            this.targetname,
-                            this.weakenStartSec,
-                            this.getServerSecurityLevel(ns) ? this.getServerSecurityLevel(ns) : 0,
-                            ns.getServerMinSecurityLevel(this.targetname)
-                                ? ns.getServerMinSecurityLevel(this.targetname)
-                                : 0,
-                            this.threadsPerCycle
-                        )
-                    );
-                    break;
-                case HackState.GW:
-                    ns.print(
-                        ns.sprintf(
-                            "%8s GROW-WEAKEN: %s => Increased available money from %s to %s/%s [Sec: %.2f]",
-                            new Date().toLocaleTimeString('it-IT'),
-                            this.targetname,
-                            ns.nFormat(this.growStartMoney, "($0.000a)"),
-                            ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
-                            ns.nFormat(this.highMoney, "($0.000a)"),
-                            this.getServerSecurityLevel(ns)
-                        )
-                    );
-                    break;
-                case HackState.HW:
-                    let totalHack = this.hackStartMoney - this.getServerMoneyAvailable(ns);
-                    ns.print(
-                        ns.sprintf(
-                            "%8s HACK-WEAKEN: %s => Decreased available money from %s to %s; %s Total (%.2f%% of max) [Sec: %.2f]",
-                            new Date().toLocaleTimeString('it-IT'),
-                            this.targetname,
-                            ns.nFormat(this.hackStartMoney, "($0.000a)"),
-                            ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
-                            ns.nFormat(totalHack, "($0.000a)"),
-                            (totalHack / ns.getServerMaxMoney(this.targetname)) * 100,
-                            this.getServerSecurityLevel(ns)
-                        )
-                    );
-                    break;
-                case HackState.HGW:
-                    ns.print(
-                        ns.sprintf(
-                            "%8s HACK-GROW-WEAKEN: %s => Cycle Complete; %s Available; Hacked %s/%s (%.2f%%/%.2f%% of max) [Sec: %.2f]",
-                            new Date().toLocaleTimeString('it-IT'),
-                            this.targetname,
-                            ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
-                            ns.nFormat(this.hackTotal, "($0.000a)"),
-                            ns.nFormat(this.hackTotal * this.cycleTotal, "($0.000a)"),
-                            (this.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
-                            ((this.hackTotal * this.cycleTotal) / ns.getServerMaxMoney(this.targetname)) * 100,
-                            this.getServerSecurityLevel(ns)
-                        )
-                    );
-                    break;
-                default:
-                    // Do Nothing
-                    break;
-            }
+        switch (this.state) {
+            case HackState.W:
+                ns.print(
+                    ns.sprintf(
+                        "%8s WEAKEN: %s => Lowered Security from %.2f to %.2f (min: %.2f); Total Threads %s",
+                        new Date().toLocaleTimeString("it-IT"),
+                        this.targetname,
+                        this.weakenStartSec,
+                        this.getServerSecurityLevel(ns) ? this.getServerSecurityLevel(ns) : 0,
+                        ns.getServerMinSecurityLevel(this.targetname)
+                            ? ns.getServerMinSecurityLevel(this.targetname)
+                            : 0,
+                        this.threadsPerCycle
+                    )
+                );
+                break;
+            case HackState.GW:
+                ns.print(
+                    ns.sprintf(
+                        "%8s GROW-WEAKEN: %s => Increased available money from %s to %s/%s [Sec: %.2f]",
+                        new Date().toLocaleTimeString("it-IT"),
+                        this.targetname,
+                        ns.nFormat(this.growStartMoney, "($0.000a)"),
+                        ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
+                        ns.nFormat(this.highMoney, "($0.000a)"),
+                        this.getServerSecurityLevel(ns)
+                    )
+                );
+                break;
+            case HackState.HW:
+                let totalHack = this.hackStartMoney - this.getServerMoneyAvailable(ns);
+                ns.print(
+                    ns.sprintf(
+                        "%8s HACK-WEAKEN: %s => Decreased available money from %s to %s; %s Total (%.2f%% of max) [Sec: %.2f]",
+                        new Date().toLocaleTimeString("it-IT"),
+                        this.targetname,
+                        ns.nFormat(this.hackStartMoney, "($0.000a)"),
+                        ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
+                        ns.nFormat(totalHack, "($0.000a)"),
+                        (totalHack / ns.getServerMaxMoney(this.targetname)) * 100,
+                        this.getServerSecurityLevel(ns)
+                    )
+                );
+                break;
+            case HackState.HGW:
+                ns.print(
+                    ns.sprintf(
+                        "%8s HACK-GROW-WEAKEN: %s => Cycle Complete; %s Available; Hacked %s/%s (%.2f%%/%.2f%% of max) [Sec: %.2f]",
+                        new Date().toLocaleTimeString("it-IT"),
+                        this.targetname,
+                        ns.nFormat(this.getServerMoneyAvailable(ns), "($0.000a)"),
+                        ns.nFormat(this.hackTotal, "($0.000a)"),
+                        ns.nFormat(this.hackTotal * this.cycleTotal, "($0.000a)"),
+                        (this.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
+                        ((this.hackTotal * this.cycleTotal) / ns.getServerMaxMoney(this.targetname)) * 100,
+                        this.getServerSecurityLevel(ns)
+                    )
+                );
+                break;
+            default:
+                // Do Nothing
+                break;
         }
 
         this.setState(ns);
@@ -532,9 +557,9 @@ export class SuperHackEnv {
 
         this.threadsPerCycle = this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
 
-        let hackReduceCounter = 0;
-        let setCycle = function () {
-            if (this.cycleTotal <= 0) return 0;
+        let setCycle = function (cycleTotal) {
+            if (cycleTotal <= 0) return [0, 0, 0, Number.MAX_VALUE, 0, 0, 0, 0, 0];
+            this.cycleTotal = cycleTotal;
             let cycleThreadAllowance = Math.floor((this.maxThreads / this.cycleTotal) * 100) / 100;
 
             this.hackThreads = cycleThreadAllowance;
@@ -558,17 +583,14 @@ export class SuperHackEnv {
             // attempt to estimate the optimal number of hack threads by reducing the hack thread count
             // by the current ratio of hack threads to grow + weaken threads. Overestimate a little bit
             // and let the reducer take care of the extra.
-            if (this.threadsPerCycle > cycleThreadAllowance) {
-                //let hackRatio = this.maxThreads * (this.hackThreads / this.threadsPerCycle);
-                //this.hackThreads = Math.min(this.maxThreads * hackRatio * 1.1, this.hackThreads);
-                this.hackThreads = cycleThreadAllowance * (this.hackThreads / this.threadsPerCycle);
-            }
+            // if (this.threadsPerCycle > cycleThreadAllowance) {
+            //     this.hackThreads = cycleThreadAllowance * (this.hackThreads / this.threadsPerCycle);
+            // }
 
             while (this.threadsPerCycle > cycleThreadAllowance) {
-                hackReduceCounter++;
                 this.hackThreads--;
 
-                if (this.hackThreads <= 0) return 0;
+                if (this.hackThreads <= 0) return [0, 0, 0, Number.MAX_VALUE];
 
                 this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
                 this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
@@ -585,65 +607,99 @@ export class SuperHackEnv {
             this.cycleBatchTime = this.cycleFullTime + this.cycleSpacer * this.cycleTotal;
             if (this.cycleTotal === 1) this.cycleBatchTime = this.cycleFullTime;
 
-            return (this.hackTotal * this.cycleTotal) / this.cycleBatchTime;
+            return [
+                (this.hackTotal * this.cycleTotal) / this.cycleBatchTime,
+                this.hackTotal,
+                this.cycleTotal,
+                this.cycleBatchTime,
+                this.threadsPerCycle,
+                cycleThreadAllowance,
+                this.hackThreads,
+                cycleThreadAllowance * (this.hackThreads / this.threadsPerCycle),
+            ];
         }.bind(this);
 
         let cycleIncomes = new Array(this.cycleMax + 1);
-
-        // find first cycle counting down from the top where income > 0, since the algorithm doesnt like
-        // flat lines and any cylcle count that results in a ram allocation less than a threshold automatically
-        // returns 0
-        let cycleMax;
-        for (cycleMax = this.cycleMax; cycleMax >= 0; cycleMax--) {
-            this.cycleTotal = cycleMax;
-            cycleIncomes[cycleMax] = setCycle();
-
-            if (cycleIncomes[cycleMax] > 0) break;
-        }
-        cycleMax++;
-
-        // find local maximum of cycleIncomes
-        // target center value,
-        //  if value to left of target is larger than target, recenter target to left of current target
-        //  if value to right of target is larger than target, recenter target to right of current target
-        //  if values to left and right of target are both less than target, keep target
-        let cycleMin = 0;
         let cycleTarget = 0;
-        let cycleSearch = 0;
-        while (true) {
-            cycleSearch++;
-            cycleTarget = cycleMin + Math.floor((cycleMax - cycleMin) / 2);
 
-            if (cycleTarget === this.cycleMax || cycleTarget === 1) break;
+        if (true) {
+            // find first cycle counting down from the top where income > 0, since the algorithm doesnt like
+            // flat lines and any cylcle count that results in a ram allocation less than a threshold automatically
+            // returns 0
+            let cycleMax;
+            for (cycleMax = this.cycleMax; cycleMax >= 0; cycleMax--) {
+                cycleIncomes[cycleMax] = setCycle(cycleMax);
 
-            if (cycleIncomes[cycleTarget - 1] === undefined) {
-                this.cycleTotal = cycleTarget - 1;
-                cycleIncomes[cycleTarget - 1] = setCycle();
+                if (cycleIncomes[cycleMax][0] > 0) break;
             }
-            if (cycleIncomes[cycleTarget] === undefined) {
-                this.cycleTotal = cycleTarget;
-                cycleIncomes[cycleTarget] = setCycle();
+            cycleMax++;
+
+            // find local maximum of cycleIncomes
+            // target center value,
+            //  if value to left of target is larger than target, recenter target to left of current target
+            //  if value to right of target is larger than target, recenter target to right of current target
+            //  if values to left and right of target are both less than target, keep target
+            let cycleMin = 0;
+            while (true) {
+                cycleTarget = cycleMin + Math.floor((cycleMax - cycleMin) / 2);
+
+                if (cycleTarget === this.cycleMax || cycleTarget === 1) break;
+
+                if (cycleIncomes[cycleTarget - 1] === undefined) {
+                    cycleIncomes[cycleTarget - 1] = setCycle(cycleTarget - 1);
+                }
+                if (cycleIncomes[cycleTarget] === undefined) {
+                    cycleIncomes[cycleTarget] = setCycle(cycleTarget);
+                }
+                if (cycleIncomes[cycleTarget + 1] === undefined) {
+                    cycleIncomes[cycleTarget + 1] = setCycle(cycleTarget + 1);
+                }
+
+                if (cycleIncomes[cycleTarget][0] < cycleIncomes[cycleTarget + 1][0]) {
+                    cycleMin = cycleTarget;
+                    continue;
+                }
+
+                if (cycleIncomes[cycleTarget][0] < cycleIncomes[cycleTarget - 1][0]) {
+                    cycleMax = cycleTarget;
+                    continue;
+                }
+
+                break;
             }
-            if (cycleIncomes[cycleTarget + 1] === undefined) {
-                this.cycleTotal = cycleTarget + 1;
-                cycleIncomes[cycleTarget + 1] = setCycle();
+        } else {
+            for (let cycle = 0; cycle < cycleIncomes.length; cycle++) {
+                cycleIncomes[cycle] = setCycle(cycle);
             }
 
-            if (cycleIncomes[cycleTarget] < cycleIncomes[cycleTarget + 1]) {
-                cycleMin = cycleTarget;
-                continue;
-            }
-
-            if (cycleIncomes[cycleTarget] < cycleIncomes[cycleTarget - 1]) {
-                cycleMax = cycleTarget;
-                continue;
-            }
-
-            break;
+            cycleTarget = cycleIncomes.sort((a, b) => b[0] - a[0])[0][2];
         }
 
-        this.cycleTotal = cycleTarget;
-        setCycle();
+        setCycle(cycleTarget);
+
+        // for (let cycle = 0; cycle < cycleIncomes.length; cycle++) {
+        //     if (cycleIncomes[cycle] !== undefined && cycleIncomes[cycle][0] > 0) {
+        //         let hackPercent = (cycleIncomes[cycle][1] / this.highMoney) * 100;
+        //         let totalHackPercent = hackPercent * cycle;
+        //         ns.tprintf(
+        //             "%s => Cycle: %d --- Income: %s/s, Total: %s | %.2f%% | %.2f%%, Threads: %d | %d | %d (%d/%d), Hack Threads %d | est %s %s",
+        //             this.targetname,
+        //             cycle,
+        //             ns.nFormat(cycleIncomes[cycle][0], "($0.000a)"),
+        //             ns.nFormat(cycleIncomes[cycle][1], "($0.000a)"),
+        //             hackPercent,
+        //             totalHackPercent,
+        //             cycleIncomes[cycle][4],
+        //             cycleIncomes[cycle][4] * cycle,
+        //             this.maxThreads,
+        //             cycleIncomes[cycle][5],
+        //             cycleIncomes[cycle][5] * cycle,
+        //             cycleIncomes[cycle][6],
+        //             cycleIncomes[cycle][7],
+        //             (cycle === cycleTarget)?"WINNER":""
+        //         );
+        //     } else ns.tprintf(`${this.targetname} => Cycle: ${cycle} --- XX`);
+        // }
 
         return this.cycleTotal === 1 ? this.hackThreads >= hackThreadsFull : true;
     }
@@ -660,6 +716,82 @@ export class SuperHackEnv {
         ns.print(
             ns.sprintf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script)
         );
+        return false;
+    }
+
+    reserveCycle(ns, cycleOffsetTime, batchID) {
+        // Target Name, UID, Batch ID, Offset Time, Start Time, End Time, Operation Time, Real Time Start, Real Time End, Real Time Operation, Diff, Exp Gain
+        let weakenHackOffsetTime = 0;
+        let weakenGrowOffsetTime = this.tspacer * 2;
+        let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
+        let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
+
+        let weakenArgsHack = [
+            this.targetname,
+            cycleOffsetTime + weakenHackOffsetTime,
+            cycleOffsetTime + this.currentTime + weakenHackOffsetTime,
+            cycleOffsetTime + this.currentTime + this.weakenTime + weakenHackOffsetTime,
+            0,
+            batchID,
+            this.dataFile,
+            this.bst,
+            "0WH",
+        ];
+
+        let weakenArgsGrow = [
+            this.targetname,
+            cycleOffsetTime + weakenGrowOffsetTime,
+            cycleOffsetTime + this.currentTime + weakenGrowOffsetTime,
+            cycleOffsetTime + this.currentTime + this.weakenTime + weakenGrowOffsetTime,
+            0,
+            batchID,
+            this.dataFile,
+            this.bst,
+            "1WG",
+        ];
+
+        let growArgs = [
+            this.targetname,
+            cycleOffsetTime + growOffsetTime,
+            cycleOffsetTime + this.currentTime + growOffsetTime,
+            cycleOffsetTime + this.currentTime + this.growTime + growOffsetTime,
+            0,
+            batchID,
+            this.dataFile,
+            this.bst,
+            "2G",
+        ];
+
+        let hackArgs = [
+            this.targetname,
+            cycleOffsetTime + hackOffsetTime,
+            cycleOffsetTime + this.currentTime + hackOffsetTime,
+            cycleOffsetTime + this.currentTime + this.hackTime + hackOffsetTime,
+            0,
+            batchID,
+            this.dataFile,
+            this.bst,
+            "3H",
+        ];
+
+        let totalThreads = this.weakenThreadsHack + this.weakenThreadsGrow + this.hackThreads + this.growThreads;
+
+        for (const host of this.hosts) {
+            let freeThreads = host.maxThreads - host.getReservedThreadCount();
+            if (freeThreads >= totalThreads) {
+                weakenArgsHack[8] = weakenArgsHack[8] + "-" + host.hostname;
+                weakenArgsGrow[8] = weakenArgsGrow[8] + "-" + host.hostname;
+                hackArgs[8] = hackArgs[8] + "-" + host.hostname;
+                growArgs[8] = growArgs[8] + "-" + host.hostname;
+                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsHack, weakenArgsHack);
+                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsGrow, weakenArgsGrow);
+                host.tryReserveThreadsExtended(ns, HACKNS, this.hackThreads, hackArgs);
+                host.tryReserveThreadsExtended(ns, GROWNS, this.growThreads, growArgs);
+
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -694,17 +826,15 @@ export class SuperHackEnv {
         this.execute(ns);
         this.resetThreads();
 
-        if (debug) {
-            ns.print(
-                ns.sprintf(
-                    "%8s WEAKEN: %s => Weaken %d; Time %s",
-                    new Date().toLocaleTimeString('it-IT'),
-                    this.targetname,
-                    this.weakenThreads,
-                    ns.tFormat(this.weakenTime)
-                )
-            );
-        }
+        ns.print(
+            ns.sprintf(
+                "%8s WEAKEN: %s => Weaken %d; Time %s",
+                new Date().toLocaleTimeString("it-IT"),
+                this.targetname,
+                this.weakenThreads,
+                ns.tFormat(this.weakenTime)
+            )
+        );
     }
 
     /** @param {import(".").NS } ns */
@@ -743,19 +873,17 @@ export class SuperHackEnv {
         this.execute(ns);
         this.resetThreads();
 
-        if (debug) {
-            ns.print(
-                ns.sprintf(
-                    "%8s GROW-WEAKEN: %s => Grow %d; Weaken %d; Total Threads %d; Time %s",
-                    new Date().toLocaleTimeString('it-IT'),
-                    this.targetname,
-                    this.growThreads,
-                    this.weakenThreadsGrow,
-                    this.threadsPerCycle,
-                    ns.tFormat(this.weakenTime)
-                )
-            );
-        }
+        ns.print(
+            ns.sprintf(
+                "%8s GROW-WEAKEN: %s => Grow %d; Weaken %d; Total Threads %d; Time %s",
+                new Date().toLocaleTimeString("it-IT"),
+                this.targetname,
+                this.growThreads,
+                this.weakenThreadsGrow,
+                this.threadsPerCycle,
+                ns.tFormat(this.weakenTime)
+            )
+        );
     }
 
     /** @param {import(".").NS } ns */
@@ -796,19 +924,18 @@ export class SuperHackEnv {
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack);
         this.execute(ns);
         this.resetThreads();
-        if (debug) {
-            ns.print(
-                ns.sprintf(
-                    "%8s HACK-WEAKEN: %s => Hack %d; Weaken %d; Total Threads %d; Time %s",
-                    new Date().toLocaleTimeString('it-IT'),
-                    this.targetname,
-                    this.hackThreads,
-                    this.weakenThreadsHack,
-                    this.threadsPerCycle,
-                    ns.tFormat(this.weakenTime)
-                )
-            );
-        }
+
+        ns.print(
+            ns.sprintf(
+                "%8s HACK-WEAKEN: %s => Hack %d; Weaken %d; Total Threads %d; Time %s",
+                new Date().toLocaleTimeString("it-IT"),
+                this.targetname,
+                this.hackThreads,
+                this.weakenThreadsHack,
+                this.threadsPerCycle,
+                ns.tFormat(this.weakenTime)
+            )
+        );
     }
 
     /** @param {import(".").NS } ns */
@@ -867,45 +994,33 @@ export class SuperHackEnv {
             return;
         }
 
-        let weakenGrowOffsetTime = this.tspacer * 2;
-        let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
-        let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
+        this.currentTime = Date.now() - this.bst;
 
-        for (let i = this.cycleTotal - 1; i >= 0; i--) {
+        for (let i = 0; i < this.cycleTotal; i++) {
             let cycleOffsetTime = i * this.cycleSpacer;
 
-            this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack, cycleOffsetTime);
-            this.reserveThreadsForExecution(
-                ns,
-                WEAKENNS,
-                this.weakenThreadsGrow,
-                cycleOffsetTime + weakenGrowOffsetTime
-            );
-            this.reserveThreadsForExecution(ns, HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
-            this.reserveThreadsForExecution(ns, GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
+            this.reserveCycle(ns, cycleOffsetTime, this.batchID++);
         }
 
         this.execute(ns);
         this.resetThreads();
 
-        if (debug) {
-            ns.print(
-                ns.sprintf(
-                    "%8s HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time %s",
-                    new Date().toLocaleTimeString('it-IT'),
-                    this.targetname,
-                    this.hackThreads,
-                    this.growThreads,
-                    this.weakenThreadsHack,
-                    this.weakenThreadsGrow,
-                    this.threadsPerCycle,
-                    this.threadsPerCycle * this.cycleTotal,
-                    this.cycleTotal,
-                    this.cycleMax,
-                    ns.tFormat(this.cycleBatchTime)
-                )
-            );
-        }
+        ns.print(
+            ns.sprintf(
+                "%8s HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time %s",
+                new Date().toLocaleTimeString("it-IT"),
+                this.targetname,
+                this.hackThreads,
+                this.growThreads,
+                this.weakenThreadsHack,
+                this.weakenThreadsGrow,
+                this.threadsPerCycle,
+                this.threadsPerCycle * this.cycleTotal,
+                this.cycleTotal,
+                this.cycleMax,
+                ns.tFormat(this.cycleBatchTime)
+            )
+        );
     }
 
     /** @param {import(".").NS } ns */
@@ -1018,5 +1133,16 @@ export class SuperHackEnv {
         }
 
         return this.simIncome / (this.simTime / 1000);
+    }
+
+    optimalHackPercent(ns) {
+        this.resetSim(ns);
+        this.simEnabled = true;
+        this.simTarget.moneyAvailable = this.simTarget.moneyMax;
+        this.simTarget.hackDifficulty = this.simTarget.minDifficulty;
+
+        this.updateForHGW(ns);
+
+        return this.hackTotal / ns.getServerMaxMoney(this.targetname);
     }
 }
