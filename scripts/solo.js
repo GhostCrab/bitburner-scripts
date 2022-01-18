@@ -38,8 +38,8 @@ export async function main(ns) {
     }
 
     if (ns.args[1]) {
-        //let env = new SuperHackEnv(ns, orderedTargetArr[0][0], allHostnames.filter(canExecuteOnServer))
-        let env = new SuperHackEnv(ns, orderedTargetArr[0][0], ["home"])
+        let env = new SuperHackEnv(ns, orderedTargetArr[0][0], allHostnames.filter(canExecuteOnServer))
+        //let env = new SuperHackEnv(ns, orderedTargetArr[0][0], ["home"])
         await env.init(ns)
 
         while (true) {

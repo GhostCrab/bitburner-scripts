@@ -73,6 +73,7 @@ class Augmentation {
     }
 
     isHackUseful() {
+        return true;
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
         if (this.stats.hacking_chance_mult) return true;
@@ -89,8 +90,9 @@ class Augmentation {
 }
 
 async function doBackdoors(ns) {
-    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a", "ecorp"];
-    //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
+    //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a", "ecorp", "fulcrumassets", "fulcrumtech"];
+    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
+    //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "omnitek", "kuai-gong", "megacorp"];
     let hosts = mapHosts();
 
     for (const [hostName, trail] of Object.entries(hosts)) {
@@ -125,19 +127,19 @@ export async function main(ns) {
     ns.tprintf(`Income: ${ns.nFormat(incomePerSec, "$0.000a")}/s`);
 
     let allFactions = [
-        // "Illuminati",
+        "Illuminati",
         "Daedalus",
-        // "The Covenant",
+        "The Covenant",
         "ECorp",
-        // "MegaCorp",
+        "MegaCorp",
         "Bachman & Associates",
-        // "Blade Industries",
-        // "NWO",
-        // "Clarke Incorporated",
-        // "OmniTek Incorporated",
-        // "Four Sigma",
-        // "KuaiGong International",
-        // "Fulcrum Secret Technologies",
+        "Blade Industries",
+        "NWO",
+        "Clarke Incorporated",
+        "OmniTek Incorporated",
+        "Four Sigma",
+        "KuaiGong International",
+        "Fulcrum Secret Technologies",
         "BitRunners",
         "The Black Hand",
         "NiteSec",
@@ -147,25 +149,26 @@ export async function main(ns) {
         "New Tokyo",
         "Sector-12",
         "Volhaven",
-        // "Speakers for the Dead",
-        // "The Dark Army",
-        // "The Syndicate",
-        // "Silhouette",
-        // "Tetrads",
-        // "Slum Snakes",
+        "Speakers for the Dead",
+        "The Dark Army",
+        "The Syndicate",
+        "Silhouette",
+        "Tetrads",
+        "Slum Snakes",
         "Netburners",
         "Tian Di Hui",
         "CyberSec",
         // "Bladeburners",
-        // "Church of the Machine God",
+        // "Church of the Machine God"
     ];
 
     let checkFactions = player.factions.concat(ns.checkFactionInvitations())
-    let sortedFactions = checkFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    //let sortedFactions = checkFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    let sortedFactions = allFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
 
     let allPurchaseableAugs = [];
-    for (let faction of sortedFactions) {
-        //for (let faction of allFactions) {
+    //for (let faction of sortedFactions) {
+    for (let faction of allFactions) {
         let augs = ns
             .getAugmentationsFromFaction(faction)
             .map((name) => {

@@ -1,5 +1,5 @@
 export const debug = false;
-export const TSPACER = 100;
+export const TSPACER = 50;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
@@ -17,12 +17,12 @@ class Host {
     constructor(ns, hostname, threadSize) {
         this.hostname = hostname;
         this.threadSize = threadSize;
-        this.maxThreads = Math.floor(ns.getServerMaxRam(this.hostname) / this.threadSize);
+        this.maxThreads = Math.floor((ns.getServerMaxRam(this.hostname) - ns.getServerUsedRam(this.hostname)) / this.threadSize);
         this.reservedScriptCalls = [];
 
         // if this host is home, reserve 64GB of ram for other stuff
         if (this.hostname === "home") {
-            let homeram = ns.getServerMaxRam(this.hostname) - 64;
+            let homeram = ns.getServerMaxRam(this.hostname) - ns.getServerUsedRam(this.hostname) - 64;
             this.maxThreads = Math.max(0, Math.floor(homeram / this.threadSize));
         }
     }
@@ -304,7 +304,7 @@ export class SuperHackEnv {
             this.updateForHGW(ns);
             let hgwIncome = (this.hackTotal * this.cycleTotal) / (this.cycleFullTime / 1000);
 
-            if (hwIncome > hgwIncome) this.state = HackState.HW;
+            if (hwIncome > hgwIncome || true) this.state = HackState.HW;
             else this.state = HackState.HGW;
         }
     }

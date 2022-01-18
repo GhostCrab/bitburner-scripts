@@ -1,14 +1,14 @@
 import { allHosts, serverIsHackable, setns, softenServer, doProgramBuys, canExecuteOnServer } from "./util.js";
-import { HackEnv, TSPACER } from "./hack_env.js";
+import { SuperHackEnv } from "./super_hack_env.js";
 
 /** @param {import("./index.d").NS } ns */
-async function calcHackRate(ns, hostname, targetname, ramAllowance, simMinutes = 2) {
-    let env = new HackEnv(ns, targetname, hostname, ramAllowance);
+async function calcHackRate(ns, hostname, targetname, simMinutes = 2) {
+    let env = new SuperHackEnv(ns, targetname, [hostname]);
     env.simEnabled = true;
 
     // simulate for 10 minutes
     //ns.tprintf("Running fastSim on %s=>%s", env.hostname, env.targetname)
-    let income = await env.fastSim(ns, 1000 * 60 * simMinutes);
+    let income = env.fastSim(ns, 1000 * 60 * simMinutes);
 
     // ns.tprintf(
     //     "Running Hack Rate on %s=>%s (%.2fGB Ram Allowance): %s/s",
@@ -43,7 +43,7 @@ async function getOrderedTargetArr(ns, _host, simMinutes) {
         .filter(serverIsHackable)
         .filter((hostname) => ns.getServerMaxMoney(hostname) > 0);
     for (let targetname of targetnames) {
-        hackRates.push([targetname, await calcHackRate(ns, host.hostname, targetname, ramAllowance, simMinutes)]);
+        hackRates.push([targetname, await calcHackRate(ns, host.hostname, targetname, simMinutes)]);
     }
 
     return hackRates.sort((a, b) => b[1] - a[1]);
@@ -55,7 +55,7 @@ export async function main(ns) {
 
     let allHostnames = allHosts();
     let attackScript = "super_hack_adv.js";
-    let attackLib = "hack_env.js";
+    let attackLib = "super_hack_env.js";
 
     doProgramBuys();
 
@@ -144,76 +144,14 @@ export async function main(ns) {
             if (target.size === bucket) targetnames.push(target.targetname);
         }
 
-        // iterate over all hosts in this bucket, killing processes on any that are attacking something not in targets and
-        // removing targets from the target array that are already being attacked
-        for (let hostname of hostnames) {
-            let ps = ns.ps(hostname);
-            let dokill = false;
-            for (let psInfo of ps) {
-                if (psInfo.filename === attackScript) {
-                    let attackTargetnameIdx = targetnames.indexOf(psInfo.args[0]);
-                    if (attackTargetnameIdx === -1) {
-                        ns.tprintf("Killing %s running on %s targeting %s", attackScript, hostname, psInfo.args[0]);
-                        dokill = true;
-                    } else {
-                        targetnames.splice(attackTargetnameIdx, 1);
-                    }
-                    break;
-                }
-            }
-
-            // If we're killing on home, make sure to only kill attack scripts so we dont kill ourselves
-            if (dokill) {
-                if (hostname !== "home") {
-                    ns.killall(hostname);
-                } else {
-                    for (let psInfo of ps) {
-                        if (
-                            psInfo.filename === attackScript ||
-                            psInfo.filename === "weaken.js" ||
-                            psInfo.filename === "grow.js" ||
-                            psInfo.filename === "hack.js"
-                        ) {
-                            ns.kill(psInfo.filename, hostname, psInfo.args);
-                        }
-                    }
-                }
-            }
-        }
-
-        // In case all the targets are accounted for, continue to the next bucket
-        if (targetnames.length === 0) continue;
-
         // iterate over all hosts in this bucket, if the host is free, run the attack script on it with one of the targets
         for (let hostname of hostnames) {
-            let ps = ns.ps(hostname);
-            let hostfree = true;
-            for (let psInfo of ps) {
-                if (psInfo.filename === attackScript) {
-                    hostfree = false;
-                    break;
-                }
-            }
+            await ns.scp(attackScript, "home", hostname);
+            await ns.scp(attackLib, "home", hostname);
 
-            if (hostfree) {
-                let targetname = targetnames.shift();
-                ns.tprintf("Starting %s on %s targeting %s", attackScript, hostname, targetname);
-
-                await ns.scp(attackScript, "home", hostname);
-                await ns.scp(attackLib, "home", hostname);
-
-                if (hostname === "home") {
-                    let allowedRam = ns.getServerMaxRam("home") - 48;
-                    if (allowedRam >= 32) ns.exec(attackScript, hostname, 1, targetname, allowedRam);
-                    else
-                        ns.tprintf(
-                            "WARNING: Not enough max ram on home to safely run script (%d)",
-                            ns.getServerMaxRam("home")
-                        );
-                } else ns.exec(attackScript, hostname, 1, targetname);
-            }
-
-            if (targetnames.length === 0) break;
+            let targetname = targetnames.shift();
+            ns.tprintf("Starting %s on %s targeting %s", attackScript, hostname, targetname);
+            ns.exec(attackScript, hostname, 1, targetname);
         }
     }
 
