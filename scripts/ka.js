@@ -9,4 +9,6 @@ export async function main(ns) {
 		ns.killall(hostname)
 	}
 	ns.killall("home")
+
+	ns.spawn("clock.js")
 }

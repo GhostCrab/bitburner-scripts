@@ -73,7 +73,7 @@ class Augmentation {
     }
 
     isHackUseful() {
-        return true;
+        //return true;
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
         if (this.stats.hacking_chance_mult) return true;
@@ -163,12 +163,12 @@ export async function main(ns) {
     ];
 
     let checkFactions = player.factions.concat(ns.checkFactionInvitations())
-    //let sortedFactions = checkFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
-    let sortedFactions = allFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    let sortedFactions = checkFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    //let sortedFactions = allFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
 
     let allPurchaseableAugs = [];
-    //for (let faction of sortedFactions) {
-    for (let faction of allFactions) {
+    for (let faction of sortedFactions) {
+    //for (let faction of allFactions) {
         let augs = ns
             .getAugmentationsFromFaction(faction)
             .map((name) => {

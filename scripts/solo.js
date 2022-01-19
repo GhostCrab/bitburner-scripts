@@ -1,4 +1,4 @@
-import { allHosts, serverIsHackable, setns, canExecuteOnServer } from "./util.js";
+import { allHosts, serverIsHackable, setns, canExecuteOnServer, cleanLogs } from "./util.js";
 import { SuperHackEnv } from "./super_hack_env.js";
 
 function calcIncome(ns, target, allHostnames, simMinutes = 2) {
@@ -9,22 +9,7 @@ function calcIncome(ns, target, allHostnames, simMinutes = 2) {
 export async function main(ns) {
     setns(ns);
 
-    ns.disableLog("disableLog")
-    ns.disableLog("sleep")
-    ns.disableLog("exec")
-    ns.disableLog("getServerMaxRam")
-    ns.disableLog("getServerSecurityLevel")
-    ns.disableLog("getServerMinSecurityLevel")
-    ns.disableLog("getServerMaxMoney")
-    ns.disableLog("getHackingLevel")
-    ns.disableLog("getServerRequiredHackingLevel")
-    ns.disableLog("scan")
-    ns.disableLog("getServerMoneyAvailable")
-
-    // ns.exec("buy_programs.js", "home")
-    // await ns.sleep(500)
-    // ns.exec("soften.js", "home")
-    // await ns.sleep(500)
+    cleanLogs();
 
     let allHostnames = allHosts();
 

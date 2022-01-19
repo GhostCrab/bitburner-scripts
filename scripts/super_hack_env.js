@@ -12,12 +12,46 @@ export const HackState = {
     HGW: "Hack, Grow, and Weaken",
 };
 
+function stFormat(ns, ms, showms = true, showfull = false) {
+    let timeLeft = ms;
+    let hours = Math.floor(ms / (1000 * 60 * 60));
+    timeLeft -= hours * (1000 * 60 * 60);
+    let minutes = Math.floor(timeLeft / (1000 * 60));
+    timeLeft -= minutes * (1000 * 60);
+    let seconds = Math.floor(timeLeft / 1000);
+    timeLeft -= seconds * 1000;
+    let milliseconds = timeLeft;
+
+    if (showms) {
+        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds);
+        if (minutes > 0) return ns.sprintf("%02d:%02d.%03d", minutes, seconds, milliseconds);
+        return ns.sprintf("%02d.%03d", seconds, milliseconds);
+    } else {
+        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d", hours, minutes, seconds);
+        if (minutes > 0) return ns.sprintf("%02d:%02d", minutes, seconds);
+        return ns.sprintf("%02d", seconds);
+    }
+}
+
+function stdFormat(ns, offset = 0, showms = true) {
+    let date = new Date(new Date().getTime() + offset);
+
+    if (showms) {
+        let ms = ns.sprintf("%03d", date.getUTCMilliseconds());
+        return date.toLocaleTimeString("it-IT") + "." + ms;
+    } else {
+        return date.toLocaleTimeString("it-IT");
+    }
+}
+
 class Host {
     /** @param {import(".").NS } ns */
     constructor(ns, hostname, threadSize) {
         this.hostname = hostname;
         this.threadSize = threadSize;
-        this.maxThreads = Math.floor((ns.getServerMaxRam(this.hostname) - ns.getServerUsedRam(this.hostname)) / this.threadSize);
+        this.maxThreads = Math.floor(
+            (ns.getServerMaxRam(this.hostname) - ns.getServerUsedRam(this.hostname)) / this.threadSize
+        );
         this.reservedScriptCalls = [];
 
         // if this host is home, reserve 64GB of ram for other stuff
@@ -304,7 +338,7 @@ export class SuperHackEnv {
             this.updateForHGW(ns);
             let hgwIncome = (this.hackTotal * this.cycleTotal) / (this.cycleFullTime / 1000);
 
-            if (hwIncome > hgwIncome || true) this.state = HackState.HW;
+            if (hwIncome > hgwIncome) this.state = HackState.HW;
             else this.state = HackState.HGW;
         }
     }
@@ -775,24 +809,77 @@ export class SuperHackEnv {
         ];
 
         let totalThreads = this.weakenThreadsHack + this.weakenThreadsGrow + this.hackThreads + this.growThreads;
+        let whReserved = false;
+        let wgReserved = false;
+        let hReserved = false;
+        let gReserved = false;
 
         for (const host of this.hosts) {
             let freeThreads = host.maxThreads - host.getReservedThreadCount();
-            if (freeThreads >= totalThreads) {
-                weakenArgsHack[8] = weakenArgsHack[8] + "-" + host.hostname;
-                weakenArgsGrow[8] = weakenArgsGrow[8] + "-" + host.hostname;
-                hackArgs[8] = hackArgs[8] + "-" + host.hostname;
-                growArgs[8] = growArgs[8] + "-" + host.hostname;
-                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsHack, weakenArgsHack);
-                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsGrow, weakenArgsGrow);
-                host.tryReserveThreadsExtended(ns, HACKNS, this.hackThreads, hackArgs);
-                host.tryReserveThreadsExtended(ns, GROWNS, this.growThreads, growArgs);
-
-                return true;
+            if (!whReserved && freeThreads >= this.weakenThreadsHack) {
+                freeThreads -= this.weakenThreadsHack;
+                whReserved = true;
             }
+
+            if (!wgReserved && freeThreads >= this.weakenThreadsGrow) {
+                freeThreads -= this.weakenThreadsGrow;
+                wgReserved = true;
+            }
+
+            if (!hReserved && freeThreads >= this.hackThreads) {
+                freeThreads -= this.hackThreads;
+                hReserved = true;
+            }
+
+            if (!gReserved && freeThreads >= this.growThreads) {
+                freeThreads -= this.growThreads;
+                gReserved = true;
+            }
+
+            if (whReserved && wgReserved && hReserved && gReserved) break;
         }
 
-        return false;
+        if (!whReserved || !wgReserved || !hReserved || !gReserved) return false;
+
+        whReserved = false;
+        wgReserved = false;
+        hReserved = false;
+        gReserved = false;
+
+        for (const host of this.hosts) {
+            let freeThreads = host.maxThreads - host.getReservedThreadCount();
+            if (!whReserved && freeThreads >= this.weakenThreadsHack) {
+                weakenArgsHack[8] = weakenArgsHack[8] + "-" + host.hostname;
+                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsHack, weakenArgsHack);
+                freeThreads -= this.weakenThreadsHack;
+                whReserved = true;
+            }
+
+            if (!wgReserved && freeThreads >= this.weakenThreadsGrow) {
+                weakenArgsGrow[8] = weakenArgsGrow[8] + "-" + host.hostname;
+                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsGrow, weakenArgsGrow);
+                freeThreads -= this.weakenThreadsGrow;
+                wgReserved = true;
+            }
+
+            if (!hReserved && freeThreads >= this.hackThreads) {
+                hackArgs[8] = hackArgs[8] + "-" + host.hostname;
+                host.tryReserveThreadsExtended(ns, HACKNS, this.hackThreads, hackArgs);
+                freeThreads -= this.hackThreads;
+                hReserved = true;
+            }
+
+            if (!gReserved && freeThreads >= this.growThreads) {
+                growArgs[8] = growArgs[8] + "-" + host.hostname;
+                host.tryReserveThreadsExtended(ns, GROWNS, this.growThreads, growArgs);
+                freeThreads -= this.growThreads;
+                gReserved = true;
+            }
+
+            if (whReserved && wgReserved && hReserved && gReserved) break;
+        }
+
+        return true;
     }
 
     execute(ns) {
@@ -828,11 +915,12 @@ export class SuperHackEnv {
 
         ns.print(
             ns.sprintf(
-                "%8s WEAKEN: %s => Weaken %d; Time %s",
+                "%8s WEAKEN: %s => Weaken %d; Time +%s [%s]",
                 new Date().toLocaleTimeString("it-IT"),
                 this.targetname,
                 this.weakenThreads,
-                ns.tFormat(this.weakenTime)
+                stFormat(ns, this.weakenTime),
+                stdFormat(ns, this.weakenTime)
             )
         );
     }
@@ -875,13 +963,14 @@ export class SuperHackEnv {
 
         ns.print(
             ns.sprintf(
-                "%8s GROW-WEAKEN: %s => Grow %d; Weaken %d; Total Threads %d; Time %s",
+                "%8s GROW-WEAKEN: %s => Grow %d; Weaken %d; Total Threads %d; Time +%s [%s]",
                 new Date().toLocaleTimeString("it-IT"),
                 this.targetname,
                 this.growThreads,
                 this.weakenThreadsGrow,
                 this.threadsPerCycle,
-                ns.tFormat(this.weakenTime)
+                stFormat(ns, this.weakenTime),
+                stdFormat(ns, this.weakenTime)
             )
         );
     }
@@ -927,13 +1016,14 @@ export class SuperHackEnv {
 
         ns.print(
             ns.sprintf(
-                "%8s HACK-WEAKEN: %s => Hack %d; Weaken %d; Total Threads %d; Time %s",
+                "%8s HACK-WEAKEN: %s => Hack %d; Weaken %d; Total Threads %d; Time +%s [%s]",
                 new Date().toLocaleTimeString("it-IT"),
                 this.targetname,
                 this.hackThreads,
                 this.weakenThreadsHack,
                 this.threadsPerCycle,
-                ns.tFormat(this.weakenTime)
+                stFormat(ns, this.weakenTime),
+                stdFormat(ns, this.weakenTime)
             )
         );
     }
@@ -994,12 +1084,32 @@ export class SuperHackEnv {
             return;
         }
 
-        this.currentTime = Date.now() - this.bst;
+        if (false) {
+            this.currentTime = Date.now() - this.bst;
 
-        for (let i = 0; i < this.cycleTotal; i++) {
-            let cycleOffsetTime = i * this.cycleSpacer;
+            for (let i = 0; i < this.cycleTotal; i++) {
+                let cycleOffsetTime = i * this.cycleSpacer;
 
-            this.reserveCycle(ns, cycleOffsetTime, this.batchID++);
+                this.reserveCycle(ns, cycleOffsetTime, this.batchID++);
+            }
+        } else {
+            let weakenGrowOffsetTime = this.tspacer * 2;
+            let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
+            let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
+    
+            for (let i = this.cycleTotal - 1; i >= 0; i--) {
+                let cycleOffsetTime = i * this.cycleSpacer;
+    
+                this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack, cycleOffsetTime);
+                this.reserveThreadsForExecution(
+                    ns,
+                    WEAKENNS,
+                    this.weakenThreadsGrow,
+                    cycleOffsetTime + weakenGrowOffsetTime
+                );
+                this.reserveThreadsForExecution(ns, HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
+                this.reserveThreadsForExecution(ns, GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
+            }
         }
 
         this.execute(ns);
@@ -1007,7 +1117,7 @@ export class SuperHackEnv {
 
         ns.print(
             ns.sprintf(
-                "%8s HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time %s",
+                "%8s HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time +%s:+%s [%s:%s]",
                 new Date().toLocaleTimeString("it-IT"),
                 this.targetname,
                 this.hackThreads,
@@ -1018,7 +1128,10 @@ export class SuperHackEnv {
                 this.threadsPerCycle * this.cycleTotal,
                 this.cycleTotal,
                 this.cycleMax,
-                ns.tFormat(this.cycleBatchTime)
+                stFormat(ns, this.weakenTime),
+                stFormat(ns, this.cycleBatchTime),
+                stdFormat(ns, this.weakenTime),
+                stdFormat(ns, this.cycleBatchTime)
             )
         );
     }
