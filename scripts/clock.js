@@ -27,7 +27,7 @@ export async function main(ns) {
     barSub2.className =
         "MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-determinate css-13u5e92";
     barSub2.setAttribute("role", "progressbar");
-    barSub2.setAttribute("aria-valuenow", "50");
+    barSub2.setAttribute("aria-valuenow", "0");
     barSub2.setAttribute("aria-valuemin", "0");
     barSub2.setAttribute("aria-valuemax", "100");
     barSub1.appendChild(barSub2);
@@ -41,12 +41,29 @@ export async function main(ns) {
         hook0.innerText = "";
     });
 
-    let tracker = 0;
+    let port = ns.getPortHandle(1)
+    let startTime = 0
+    let endTime = 1000
+    let fullTime = 1000
     while (true) {
-        tracker++;
-        let tvalue = tracker % 1000;
-        let transform = 100 - (tvalue / 1000) * 100;
-        let wholeValue = Math.floor((tvalue / 1000) * 100);
+        if (!port.empty()) {
+            let data = port.read()
+            startTime = data[0].getTime()
+            endTime = new Date(startTime + data[1]).getTime()
+            fullTime = endTime - startTime
+        }
+
+        let curTime = new Date().getTime()
+        let tvalue = curTime - startTime;
+        let nvalue = (tvalue / fullTime) * 100
+        let transform = 100 - nvalue;
+        let wholeValue = Math.floor(nvalue);
+
+        if (startTime === 0) {
+            transform = 100
+            wholeValue = 0
+        }
+
         try {
             let date = new Date();
             let ms = ns.sprintf("%03d", date.getUTCMilliseconds());

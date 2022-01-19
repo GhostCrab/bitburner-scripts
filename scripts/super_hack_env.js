@@ -1096,10 +1096,10 @@ export class SuperHackEnv {
             let weakenGrowOffsetTime = this.tspacer * 2;
             let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
             let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
-    
+
             for (let i = this.cycleTotal - 1; i >= 0; i--) {
                 let cycleOffsetTime = i * this.cycleSpacer;
-    
+
                 this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack, cycleOffsetTime);
                 this.reserveThreadsForExecution(
                     ns,
@@ -1114,6 +1114,10 @@ export class SuperHackEnv {
 
         this.execute(ns);
         this.resetThreads();
+
+        let port = ns.getPortHandle(1);
+        port.clear()
+        port.write([new Date(), this.cycleBatchTime])
 
         ns.print(
             ns.sprintf(
