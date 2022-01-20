@@ -1,15 +1,15 @@
 export const debug = false;
-export const TSPACER = 50;
+export const TSPACER = 100;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
 
 export const HackState = {
     UNSET: "UNDEFINED STATE",
-    W: "Weaken",
-    GW: "Grow and Weaken",
-    HW: "Hack and Weaken",
-    HGW: "Hack, Grow, and Weaken",
+    W: "W",
+    GW: "GW",
+    HW: "HW",
+    HGW: "HGW",
 };
 
 function stFormat(ns, ms, showms = true, showfull = false) {
@@ -909,6 +909,16 @@ export class SuperHackEnv {
             return;
         }
 
+        let port = ns.getPortHandle(1);
+        port.clear();
+        port.write([
+            new Date(),
+            this.weakenTime,
+            this.targetname,
+            ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
+            this.state
+        ]);
+
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreads);
         this.execute(ns);
         this.resetThreads();
@@ -953,6 +963,16 @@ export class SuperHackEnv {
 
             return;
         }
+
+        let port = ns.getPortHandle(1);
+        port.clear();
+        port.write([
+            new Date(),
+            this.weakenTime,
+            this.targetname,
+            ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
+            this.state
+        ]);
 
         // start grow such that it finishes slightly before weaken
         let growOffsetTime = this.weakenTime - this.tspacer - this.growTime;
@@ -1006,6 +1026,16 @@ export class SuperHackEnv {
 
             return;
         }
+
+        let port = ns.getPortHandle(1);
+        port.clear();
+        port.write([
+            new Date(),
+            this.weakenTime,
+            this.targetname,
+            ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
+            this.state
+        ]);
 
         // start hack such that it finishes slightly before weaken
         let hackOffsetTime = this.weakenTime - this.tspacer - this.hackTime;
@@ -1084,7 +1114,7 @@ export class SuperHackEnv {
             return;
         }
 
-        if (false) {
+        if (true) {
             this.currentTime = Date.now() - this.bst;
 
             for (let i = 0; i < this.cycleTotal; i++) {
@@ -1116,8 +1146,14 @@ export class SuperHackEnv {
         this.resetThreads();
 
         let port = ns.getPortHandle(1);
-        port.clear()
-        port.write([new Date(), this.cycleBatchTime])
+        port.clear();
+        port.write([
+            new Date(),
+            this.cycleBatchTime,
+            this.targetname,
+            ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
+            this.state
+        ]);
 
         ns.print(
             ns.sprintf(

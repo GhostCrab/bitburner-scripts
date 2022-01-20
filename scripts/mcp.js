@@ -73,7 +73,7 @@ class Augmentation {
     }
 
     isHackUseful() {
-        //return true;
+        return true;
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
         if (this.stats.hacking_chance_mult) return true;
