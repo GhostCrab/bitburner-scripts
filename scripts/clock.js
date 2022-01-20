@@ -57,6 +57,7 @@ export async function main(ns) {
     const tInfoSub1 = document.createElement("th");
     tInfoSub1.className = "jss13 MuiTableCell-root MuiTableCell-body MuiTableCell-sizeMedium css-hadb7u";
     tInfoSub1.setAttribute("scope", "row");
+    tInfoSub1.setAttribute("style", "padding-right: 0.5em");
     tInfoRoot.appendChild(tInfoSub1);
     const tInfoSub11 = document.createElement("p");
     tInfoSub11.className = "jss17 MuiTypography-root MuiTypography-body1 css-fjpam8";
