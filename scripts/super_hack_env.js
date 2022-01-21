@@ -191,7 +191,7 @@ export class SuperHackEnv {
         if (hostnames)
             this.hosts = hostnames
                 .map((x) => new Host(ns, x, this.threadSize), this)
-                .filter((x) => x.maxThreads > 0)
+                .filter((x) => x.maxThreads > 0)    
                 .sort((a, b) => b.maxThreads - a.maxThreads);
 
         this.maxThreads = 0;
@@ -848,20 +848,6 @@ export class SuperHackEnv {
 
         for (const host of this.hosts) {
             let freeThreads = host.maxThreads - host.getReservedThreadCount();
-            if (!whReserved && freeThreads >= this.weakenThreadsHack) {
-                weakenArgsHack[8] = weakenArgsHack[8] + "-" + host.hostname;
-                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsHack, weakenArgsHack);
-                freeThreads -= this.weakenThreadsHack;
-                whReserved = true;
-            }
-
-            if (!wgReserved && freeThreads >= this.weakenThreadsGrow) {
-                weakenArgsGrow[8] = weakenArgsGrow[8] + "-" + host.hostname;
-                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsGrow, weakenArgsGrow);
-                freeThreads -= this.weakenThreadsGrow;
-                wgReserved = true;
-            }
-
             if (!hReserved && freeThreads >= this.hackThreads) {
                 hackArgs[8] = hackArgs[8] + "-" + host.hostname;
                 host.tryReserveThreadsExtended(ns, HACKNS, this.hackThreads, hackArgs);
@@ -874,6 +860,20 @@ export class SuperHackEnv {
                 host.tryReserveThreadsExtended(ns, GROWNS, this.growThreads, growArgs);
                 freeThreads -= this.growThreads;
                 gReserved = true;
+            }
+
+            if (!whReserved && freeThreads >= this.weakenThreadsHack) {
+                weakenArgsHack[8] = weakenArgsHack[8] + "-" + host.hostname;
+                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsHack, weakenArgsHack);
+                freeThreads -= this.weakenThreadsHack;
+                whReserved = true;
+            }
+
+            if (!wgReserved && freeThreads >= this.weakenThreadsGrow) {
+                weakenArgsGrow[8] = weakenArgsGrow[8] + "-" + host.hostname;
+                host.tryReserveThreadsExtended(ns, WEAKENNS, this.weakenThreadsGrow, weakenArgsGrow);
+                freeThreads -= this.weakenThreadsGrow;
+                wgReserved = true;
             }
 
             if (whReserved && wgReserved && hReserved && gReserved) break;
@@ -1130,6 +1130,8 @@ export class SuperHackEnv {
             for (let i = this.cycleTotal - 1; i >= 0; i--) {
                 let cycleOffsetTime = i * this.cycleSpacer;
 
+                this.reserveThreadsForExecution(ns, HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
+                this.reserveThreadsForExecution(ns, GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
                 this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack, cycleOffsetTime);
                 this.reserveThreadsForExecution(
                     ns,
@@ -1137,8 +1139,7 @@ export class SuperHackEnv {
                     this.weakenThreadsGrow,
                     cycleOffsetTime + weakenGrowOffsetTime
                 );
-                this.reserveThreadsForExecution(ns, HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
-                this.reserveThreadsForExecution(ns, GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
+                
             }
         }
 

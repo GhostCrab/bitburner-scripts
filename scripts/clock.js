@@ -36,78 +36,78 @@ export async function main(ns) {
     const tableEl = hook0.parentElement.parentElement;
 
     // Add Clock
-    const clockRoot = document.createElement("tr");
+    const clockRoot = doc.createElement("tr");
     clockRoot.className = "MuiTableRow-root css-9k2whp";
     clockRoot.setAttribute("id", "extra-clock");
     tableEl.after(clockRoot);
-    const clockSub1 = document.createElement("th");
+    const clockSub1 = doc.createElement("th");
     clockSub1.className = "jss13 MuiTableCell-root MuiTableCell-body MuiTableCell-sizeMedium css-hadb7u";
     clockSub1.setAttribute("scope", "row");
     clockRoot.appendChild(clockSub1);
-    const clockSub11 = document.createElement("p");
+    const clockSub11 = doc.createElement("p");
     clockSub11.className = "jss17 MuiTypography-root MuiTypography-body1 css-fjpam8";
     clockSub11.innerText = "clock";
     clockSub1.appendChild(clockSub11);
 
     // Add Target & Income/s
-    const tInfoRoot = document.createElement("tr");
+    const tInfoRoot = doc.createElement("tr");
     tInfoRoot.className = "MuiTableRow-root css-9k2whp";
     tInfoRoot.setAttribute("id", "extra-target-info");
     clockRoot.after(tInfoRoot);
-    const tInfoSub1 = document.createElement("th");
+    const tInfoSub1 = doc.createElement("th");
     tInfoSub1.className = "jss13 MuiTableCell-root MuiTableCell-body MuiTableCell-sizeMedium css-hadb7u";
     tInfoSub1.setAttribute("scope", "row");
     tInfoSub1.setAttribute("style", "padding-right: 0.5em");
     tInfoRoot.appendChild(tInfoSub1);
-    const tInfoSub11 = document.createElement("p");
+    const tInfoSub11 = doc.createElement("p");
     tInfoSub11.className = "jss17 MuiTypography-root MuiTypography-body1 css-fjpam8";
     tInfoSub11.innerText = "tname";
     tInfoSub1.appendChild(tInfoSub11);
-    const tInfoSub2 = document.createElement("th");
+    const tInfoSub2 = doc.createElement("th");
     tInfoSub2.className =
         "jss13 MuiTableCell-root MuiTableCell-body MuiTableCell-alignRight MuiTableCell-sizeMedium css-7v1cxh";
     tInfoSub2.setAttribute("scope", "row");
     tInfoRoot.appendChild(tInfoSub2);
-    const tInfoSub21 = document.createElement("p");
+    const tInfoSub21 = doc.createElement("p");
     tInfoSub21.className = "jss17 MuiTypography-root MuiTypography-body1 css-fjpam8";
     tInfoSub21.innerText = "income";
     tInfoSub2.appendChild(tInfoSub21);
 
     // Add Hack State & Countdown
-    const hackStateRoot = document.createElement("tr");
+    const hackStateRoot = doc.createElement("tr");
     hackStateRoot.className = "MuiTableRow-root css-9k2whp";
     hackStateRoot.setAttribute("id", "extra-hack-state");
     tInfoRoot.after(hackStateRoot);
-    const hackStateSub1 = document.createElement("th");
+    const hackStateSub1 = doc.createElement("th");
     hackStateSub1.className = "jss13 MuiTableCell-root MuiTableCell-body MuiTableCell-sizeMedium css-hadb7u";
     hackStateSub1.setAttribute("scope", "row");
     hackStateRoot.appendChild(hackStateSub1);
-    const hackStateSub11 = document.createElement("p");
+    const hackStateSub11 = doc.createElement("p");
     hackStateSub11.className = "jss17 MuiTypography-root MuiTypography-body1 css-fjpam8";
     hackStateSub11.innerText = "state";
     hackStateSub1.appendChild(hackStateSub11);
-    const hackStateSub2 = document.createElement("th");
+    const hackStateSub2 = doc.createElement("th");
     hackStateSub2.className =
         "jss13 MuiTableCell-root MuiTableCell-body MuiTableCell-alignRight MuiTableCell-sizeMedium css-7v1cxh";
     hackStateSub2.setAttribute("scope", "row");
     hackStateRoot.appendChild(hackStateSub2);
-    const hackStateSub21 = document.createElement("p");
+    const hackStateSub21 = doc.createElement("p");
     hackStateSub21.className = "jss17 MuiTypography-root MuiTypography-body1 css-fjpam8";
     hackStateSub21.innerText = "countdown";
     hackStateSub2.appendChild(hackStateSub21);
 
     // Add Progress Bar
-    const barRoot = document.createElement("tr");
+    const barRoot = doc.createElement("tr");
     barRoot.className = "MuiTableRow-root css-9k2whp";
     barRoot.setAttribute("id", "extra-progress");
     hackStateRoot.after(barRoot);
-    const barSub1 = document.createElement("th");
+    const barSub1 = doc.createElement("th");
     barSub1.className = "jss14 MuiTableCell-root MuiTableCell-body MuiTableCell-sizeMedium css-hadb7u";
     barSub1.setAttribute("scope", "row");
     barSub1.setAttribute("colspan", "2");
     barSub1.setAttribute("style", "padding-bottom: 2px; position: relative; top: -3px;");
     barRoot.appendChild(barSub1);
-    const barSub2 = document.createElement("span");
+    const barSub2 = doc.createElement("span");
     barSub2.className =
         "MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-determinate css-13u5e92";
     barSub2.setAttribute("role", "progressbar");
@@ -115,7 +115,7 @@ export async function main(ns) {
     barSub2.setAttribute("aria-valuemin", "0");
     barSub2.setAttribute("aria-valuemax", "100");
     barSub1.appendChild(barSub2);
-    const barSub3 = document.createElement("span");
+    const barSub3 = doc.createElement("span");
     barSub3.className =
         "MuiLinearProgress-bar MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Determinate css-1yk0k18";
     barSub3.setAttribute("style", "transform: translateX(-100%);");
