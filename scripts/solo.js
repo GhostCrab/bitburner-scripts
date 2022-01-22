@@ -16,6 +16,7 @@ export async function main(ns) {
     let orderedTargetArr = allHostnames
         .filter(serverIsHackable)
         .filter((x) => ns.getServerMaxMoney(x) > 1)
+        .filter((x) => x.indexOf("hacknet-node") === -1)
         .map((x) => [x, calcIncome(ns, x, allHostnames, ns.args[0])])
         .sort((a, b) => b[1] - a[1]);
 
