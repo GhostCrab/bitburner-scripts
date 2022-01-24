@@ -1,0 +1,61 @@
+[ ] mcp.js: to buy dependent augs for the next most expensive augs
+[ ] mcp.js: to ignore Neuroflux Governor
+    - mostly important for buying first round augs
+[ ] mcp.js: to calculate true cost of all augs and only buy when the cash is available
+[ ] general: outline path to ascension
+    [ ] figure out overlapping augs for mainline hack factions
+    [ ] find all non-hack factions with hack or rep augs
+    [ ] make a list of all faction:aug pairs in order of rep and decide how much rep is required for each outline
+    [ ] write library that evaluates progress and can be queried to ask for next faction to join/work/contract
+[ ] general: transtion codebase to vscode-template
+    - dependent on if work PC can run node.js ts compiler
+    - https://github.com/bitburner-official/vscode-template
+[ ] sleeve.js: add mode to work for faction/job, prioritized by needed augs
+    - depends on library that figures out ascension goals and progress
+    [ ] basic/brute implementation can be to work joined factions in order of totalRep if they have outstanding
+        augs and have not hit the donation limit
+[ ] NEW: write script to track work and quit and move on to next milestone when any of the following
+    - working and hit faction join limit
+    - contracting and hit donation limit
+    - contracting and hit price of target aug (might not be most expensive aug if another faction sells duplicates)
+    - next milestone functionality depends on library that figures out ascension goals and progress
+    [ ] basic/brute implementation can be to quit on basic limits (max aug/domation limit/faction join limit) and
+        move on to the faction with the next highest rep that has not hit the limits
+[ ] NEW: write orchestrator to distribute and execute share.js script
+
+
+=== Bitnodes ===
+
+BN1  Normal: 3/3 
+BN2  Gangs: 0/3
+BN3  Corporations: 0/3
+BN4  Singularity: 3/3
+BN5  Intelligence: 3/3
+BN6  Bladeburner: 1/3
+BN7  Bladeburner Auto: 0/3
+BN8  Stocks: 0/3
+BN9  Hacknet: 0/3 *In Progress*
+BN10 Sleeve: 1/3
+BN11 Hard Mode: 0/3
+BN12 Recursion: 0/~
+BN13 Machine God: 0/3
+
+Priority:
+
+9.1
+2.1
+12.1-5?
+9.2
+9.3
+10.2
+10.3
+
+??
+11.1-3
+13.1-3
+2.2-3
+3.1-3
+8.1-3
+6.2-3
+7.1-3
+12.1~
