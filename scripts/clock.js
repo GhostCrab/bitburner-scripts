@@ -1,4 +1,5 @@
 var lastEl;
+var roots = [];
 
 function stFormat(ns, ms, showms = true, showfull = false) {
     let timeLeft = ms;
@@ -36,6 +37,8 @@ function addBottomLine() {
 
     lastEl.after(newRootEl);
 
+    roots.push(newRootEl);
+
     return newRootEl;
 }
 
@@ -48,18 +51,20 @@ function addSingle() {
     const hackRootEl = overviewEl.children[2];
 
     const newRootEl = hackRootEl.cloneNode(true);
-    newRootEl.removeChild(newRootEl.childNodes.item(1))
-    
-    const newEl = newRootEl.children[0].firstChild
-    newEl.removeAttribute("id")
-    newEl.innerText = ''
+    newRootEl.removeChild(newRootEl.childNodes.item(1));
+
+    const newEl = newRootEl.children[0].firstChild;
+    newEl.removeAttribute("id");
+    newEl.innerText = "";
 
     if (lastEl === undefined) lastEl = hookRootEl;
 
     lastEl.after(newRootEl);
-    lastEl = newRootEl
+    lastEl = newRootEl;
 
-    return [newRootEl, newEl]    
+    roots.push(newRootEl);
+
+    return newEl;
 }
 
 function addDouble() {
@@ -71,21 +76,23 @@ function addDouble() {
     const hackRootEl = overviewEl.children[2];
 
     const newRootEl = hackRootEl.cloneNode(true);
-    
-    const newEl1 = newRootEl.children[0].firstChild
-    newEl1.removeAttribute("id")
-    newEl1.innerText = ''
 
-    const newEl2 = newRootEl.children[1].firstChild
-    newEl2.removeAttribute("id")
-    newEl2.innerText = ''
+    const newEl1 = newRootEl.children[0].firstChild;
+    newEl1.removeAttribute("id");
+    newEl1.innerText = "";
+
+    const newEl2 = newRootEl.children[1].firstChild;
+    newEl2.removeAttribute("id");
+    newEl2.innerText = "";
 
     if (lastEl === undefined) lastEl = hookRootEl;
 
     lastEl.after(newRootEl);
-    lastEl = newRootEl
+    lastEl = newRootEl;
 
-    return [newRootEl, newEl1, newEl2]    
+    roots.push(newRootEl);
+
+    return [newEl1, newEl2];
 }
 
 function addProgress() {
@@ -97,43 +104,17 @@ function addProgress() {
     const hackProgressEl = overviewEl.children[3];
 
     const newRootEl = hackProgressEl.cloneNode(true);
-    const newSub1 = newRootEl.firstChild.firstChild
-    const newSub2 = newRootEl.firstChild.firstChild.firstChild
+    const newSub1 = newRootEl.firstChild.firstChild;
+    const newSub2 = newRootEl.firstChild.firstChild.firstChild;
 
     if (lastEl === undefined) lastEl = hookRootEl;
 
     lastEl.after(newRootEl);
-    lastEl = newRootEl
+    lastEl = newRootEl;
 
-    return [newRootEl, newSub1, newSub2]
+    roots.push(newRootEl);
 
-
-    /*
-    // Add Progress Bar
-    const barRoot = doc.createElement("tr");
-    barRoot.className = "MuiTableRow-root css-9k2whp";
-    barRoot.setAttribute("id", "extra-progress");
-    hackStateRoot.after(barRoot);
-    const barSub1 = doc.createElement("th");
-    barSub1.className = "jss14 MuiTableCell-root MuiTableCell-body MuiTableCell-sizeMedium css-hadb7u";
-    barSub1.setAttribute("scope", "row");
-    barSub1.setAttribute("colspan", "2");
-    barSub1.setAttribute("style", "padding-bottom: 2px; position: relative; top: -3px;");
-    barRoot.appendChild(barSub1);
-    const barSub2 = doc.createElement("span");
-    barSub2.className =
-        "MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-determinate css-13u5e92";
-    barSub2.setAttribute("role", "progressbar");
-    barSub2.setAttribute("aria-valuenow", "0");
-    barSub2.setAttribute("aria-valuemin", "0");
-    barSub2.setAttribute("aria-valuemax", "100");
-    barSub1.appendChild(barSub2);
-    const barSub3 = doc.createElement("span");
-    barSub3.className =
-        "MuiLinearProgress-bar MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Determinate css-1yk0k18";
-    barSub3.setAttribute("style", "transform: translateX(-100%);");
-    barSub2.appendChild(barSub3);
-    */
+    return [newSub1, newSub2];
 }
 
 /** @param {import(".").NS } ns */
@@ -147,20 +128,15 @@ export async function main(ns) {
         return;
     }
 
-
-    let [clockRootEl, clockEl] = addSingle()
-    let [targetInfoRootEl, targetEl, incomeEl] = addDouble()
-    let [hackStateRootEl, stateEl, countdownEl] = addDouble()
-    let [hackProgressRootEl, hackProgressEl1, hackProgressEl2] = addProgress()
-    let lineEl = addBottomLine()
-
+    let clockEl = addSingle();
+    let targetEl = addSingle();
+    let incomeEl = addSingle();
+    let [stateEl, countdownEl] = addDouble();
+    let [hackProgressEl1, hackProgressEl2] = addProgress();
+    addBottomLine();
 
     ns.atExit(function () {
-        lineEl.parentNode.removeChild(lineEl);
-        clockRootEl.parentNode.removeChild(clockRootEl);
-        targetInfoRootEl.parentNode.removeChild(targetInfoRootEl);
-        hackStateRootEl.parentNode.removeChild(hackStateRootEl);
-        hackProgressRootEl.parentNode.removeChild(hackProgressRootEl);
+        for (const root of roots) root.parentNode.removeChild(root);
     });
 
     let port = ns.getPortHandle(1);

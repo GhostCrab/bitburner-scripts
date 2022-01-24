@@ -16,7 +16,6 @@ export async function main(ns) {
     let orderedTargetArr = allHostnames
         .filter(serverIsHackable)
         .filter((x) => ns.getServerMaxMoney(x) > 1)
-        .filter((x) => x.indexOf("hacknet-node") === -1)
         .map((x) => [x, calcIncome(ns, x, allHostnames, ns.args[0])])
         .sort((a, b) => b[1] - a[1]);
 
@@ -25,8 +24,11 @@ export async function main(ns) {
     }
 
     if (ns.args[1]) {
-
-        let env = new SuperHackEnv(ns, orderedTargetArr[0][0], allHostnames.filter(canExecuteOnServer));
+        let env = new SuperHackEnv(
+            ns,
+            orderedTargetArr[0][0],
+            allHostnames.filter(canExecuteOnServer).filter((x) => x.indexOf("hacknet-node") === -1)
+        );
         //let env = new SuperHackEnv(ns, orderedTargetArr[0][0], ["home"])
         await env.init(ns);
 

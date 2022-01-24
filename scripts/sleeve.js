@@ -22,42 +22,42 @@ export async function main(ns) {
     }
 
     switch (ns.args[0]) {
-        // case "all":
-        //     ns.sleeve.travel(0, "Sector-12");
-        //     ns.sleeve.setToGymWorkout(0, "Powerhouse Gym", "str");
-        //     ns.sleeve.travel(1, "Sector-12");
-        //     ns.sleeve.setToGymWorkout(1, "Powerhouse Gym", "def");
-        //     ns.sleeve.travel(2, "Sector-12");
-        //     ns.sleeve.setToGymWorkout(2, "Powerhouse Gym", "dex");
-        //     ns.sleeve.travel(3, "Sector-12");
-        //     ns.sleeve.setToGymWorkout(3, "Powerhouse Gym", "agi");
+        case "all":
+            ns.sleeve.travel(0, "Sector-12");
+            ns.sleeve.setToGymWorkout(0, "Powerhouse Gym", "str");
+            ns.sleeve.travel(1, "Sector-12");
+            ns.sleeve.setToGymWorkout(1, "Powerhouse Gym", "def");
+            ns.sleeve.travel(2, "Sector-12");
+            ns.sleeve.setToGymWorkout(2, "Powerhouse Gym", "dex");
+            ns.sleeve.travel(3, "Sector-12");
+            ns.sleeve.setToGymWorkout(3, "Powerhouse Gym", "agi");
 
-        //     ns.sleeve.travel(4, "Volhaven");
-        //     ns.sleeve.setToUniversityCourse(4, "ZB Institute of Technology", "Algorithms");
-        //     ns.sleeve.travel(5, "Volhaven");
-        //     ns.sleeve.setToUniversityCourse(5, "ZB Institute of Technology", "Leadership");
-        //     break;
-        // case "hack":
-        //     for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
-        //         ns.sleeve.travel(i, "Volhaven");
-        //         ns.sleeve.setToUniversityCourse(i, "ZB Institute of Technology", "Algorithms");
-        //     }
-        //     break;
-        // case "cha":
-        //     for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
-        //         ns.sleeve.travel(i, "Volhaven");
-        //         ns.sleeve.setToUniversityCourse(i, "ZB Institute of Technology", "Leadership");
-        //     }
-        //     break;
-        // case "str":
-        // case "def":
-        // case "dex":
-        // case "agi":
-        //     for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
-        //         ns.sleeve.travel(i, "Sector-12");
-        //         ns.sleeve.setToGymWorkout(0, "Powerhouse Gym", ns.args[0]);
-        //     }
-        //     break;
+            ns.sleeve.travel(4, "Volhaven");
+            ns.sleeve.setToUniversityCourse(4, "ZB Institute of Technology", "Algorithms");
+            ns.sleeve.travel(5, "Volhaven");
+            ns.sleeve.setToUniversityCourse(5, "ZB Institute of Technology", "Leadership");
+            break;
+        case "hack":
+            for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
+                ns.sleeve.travel(i, "Volhaven");
+                ns.sleeve.setToUniversityCourse(i, "ZB Institute of Technology", "Algorithms");
+            }
+            break;
+        case "cha":
+            for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
+                ns.sleeve.travel(i, "Volhaven");
+                ns.sleeve.setToUniversityCourse(i, "ZB Institute of Technology", "Leadership");
+            }
+            break;
+        case "str":
+        case "def":
+        case "dex":
+        case "agi":
+            for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
+                ns.sleeve.travel(i, "Sector-12");
+                ns.sleeve.setToGymWorkout(0, "Powerhouse Gym", ns.args[0]);
+            }
+            break;
         case "mug":
             for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
                 ns.sleeve.setToCommitCrime(i, "Mug");

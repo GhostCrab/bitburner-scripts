@@ -168,7 +168,7 @@ function generateNewServerValue(ns) {
     let bestUpgrade;
     while (true) {
         let hashServerUpgrades = Object.keys(HSUpgradeType)
-            .map((key) => new HSUpgrade(ns, -1, HSUpgradeType[key], stats))
+            .map((key) => new HSUpgrade(ns, ns.hacknet.numNodes(), HSUpgradeType[key], stats))
             .sort((a, b) => b.upgradeValue - a.upgradeValue);
 
         let newBestUpgrade = hashServerUpgrades[0];
@@ -270,7 +270,7 @@ export async function main(ns) {
             numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
             effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
 
-            while (ns.hacknet.numHashes() > ns.hacknet.hashCapacity() * 0.8) ns.hacknet.spendHashes("Sell for Money");
+            while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money")) ns.hacknet.spendHashes("Sell for Money");
 
             await ns.sleep(1000);
         }

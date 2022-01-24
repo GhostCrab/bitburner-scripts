@@ -162,13 +162,15 @@ export async function main(ns) {
         // "Church of the Machine God"
     ];
 
-    let checkFactions = player.factions.concat(ns.checkFactionInvitations())
+    let checkFactions = player.factions.concat(ns.checkFactionInvitations());
     let sortedFactions = checkFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
     //let sortedFactions = allFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
 
     let allPurchaseableAugs = [];
+    let topFaction = true;
     for (let faction of sortedFactions) {
-    //for (let faction of allFactions) {
+        //for (let faction of allFactions) {
+        if (faction === "Bladeburners") continue;
         let augs = ns
             .getAugmentationsFromFaction(faction)
             .map((name) => {
@@ -185,18 +187,21 @@ export async function main(ns) {
             }
         }
 
+        if (augsToBuy.length === 0 && !topFaction) continue;
+
         ns.tprintf("%s (rep: %d):", faction, ns.getFactionRep(faction));
         for (let aug of augsToBuy) {
             ns.tprintf("  %s", aug);
             // printAugStats(aug.stats);
         }
+
+        topFaction = false;
     }
 
     allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price);
 
     for (let aug of allPurchaseableAugs) {
-        if (ns.args[0])
-            ns.purchaseAugmentation(aug.faction, aug.name)
+        if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
         ns.tprintf("%s", aug);
     }
 }
