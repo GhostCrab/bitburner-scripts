@@ -55,7 +55,7 @@ export async function main(ns) {
         case "agi":
             for (let i = 0; i < ns.sleeve.getNumSleeves(); i++) {
                 ns.sleeve.travel(i, "Sector-12");
-                ns.sleeve.setToGymWorkout(0, "Powerhouse Gym", ns.args[0]);
+                ns.sleeve.setToGymWorkout(i, "Powerhouse Gym", ns.args[0]);
             }
             break;
         case "mug":

@@ -1,7 +1,5 @@
-[ ] mcp.js: to buy dependent augs for the next most expensive augs
-[ ] mcp.js: to ignore Neuroflux Governor
-    - mostly important for buying first round augs
 [ ] mcp.js: to calculate true cost of all augs and only buy when the cash is available
+[ ] mcp.js: if we dont have enough money to purchase all queued augs, skip augs that are from donatable factions
 [ ] general: outline path to ascension
     [ ] figure out overlapping augs for mainline hack factions
     [ ] find all non-hack factions with hack or rep augs

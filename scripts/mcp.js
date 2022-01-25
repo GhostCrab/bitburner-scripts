@@ -55,6 +55,9 @@ class Augmentation {
         this.owned = ownedAugs.includes(this.name);
         this.installed = installedAugs.includes(this.name);
         this.purchaseable = ns.getFactionRep(faction) >= this.rep;
+        let dep = ns.getAugmentationPrereq(this.name)[0];
+        if (dep !== undefined && (ownedAugs.includes(dep) || installedAugs.includes(dep))) dep = undefined;
+        this.dep = dep;
         let installedStr = this.installed
             ? "INSTALLED"
             : this.owned
@@ -73,6 +76,7 @@ class Augmentation {
     }
 
     isHackUseful() {
+        if (this.name === "Neuroflux Governor") return false;
         return true;
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
@@ -82,7 +86,12 @@ class Augmentation {
         if (this.stats.hacking_money_mult) return true;
         if (this.stats.hacking_mult) return true;
         if (this.stats.hacking_speed_mult) return true;
-        if (this.name === "BitRunners Neurolink" || this.name === "CashRoot Starter Kit" || this.name === "PCMatrix")
+        if (
+            this.name === "BitRunners Neurolink" ||
+            this.name === "CashRoot Starter Kit" ||
+            this.name === "PCMatrix" ||
+            this.name === "Neuroreceptor Management Implant"
+        )
             return true;
 
         return false;
@@ -198,10 +207,74 @@ export async function main(ns) {
         topFaction = false;
     }
 
-    allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price);
+    for (let i = 0; i < allPurchaseableAugs.length; i++) {
+        let checkName = allPurchaseableAugs[i].name;
+        let j = i + 1;
+        while (j < allPurchaseableAugs.length) {
+            if (allPurchaseableAugs[j].name === checkName) {
+                allPurchaseableAugs.splice(j, 1);
+            } else {
+                j++;
+            }
+        }
+    }
 
-    for (let aug of allPurchaseableAugs) {
-        if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
-        ns.tprintf("%s", aug);
+    allPurchaseableAugs = allPurchaseableAugs
+        .sort((a, b) => b.price - a.price)
+        .filter((a) => a.faction !== "Bachman & Associates");
+
+    // reorder array to buy dependent augs first and purge augs that cant be bought
+    // because of a missing dependency
+    for (let i = 0; i < allPurchaseableAugs.length; i++) {
+        let depName = allPurchaseableAugs[i].dep;
+        if (depName === undefined) continue;
+
+        let foundDep = false;
+        let j = i + 1;
+        while (j < allPurchaseableAugs.length) {
+            if (allPurchaseableAugs[j].name === depName) {
+                let tmp = allPurchaseableAugs[j];
+                // remove aug from current place
+                allPurchaseableAugs.splice(j, 1);
+                // place it before the main aug
+                allPurchaseableAugs.splice(i, 0, tmp);
+                foundDep = true;
+                i++;
+                break;
+            } else {
+                j++;
+            }
+        }
+
+        // if we dont have the dependency queued, remove this aug from the buy list
+        if (!foundDep) {
+            ns.tprintf(
+                "WARNING: Unable to find dependency %s:%s in the queue",
+                allPurchaseableAugs[i].name,
+                allPurchaseableAugs[i].dep
+            );
+            allPurchaseableAugs.splice(i, 1);
+        }
+    }
+
+    if (allPurchaseableAugs.length > 0) {
+        let ownedAugs = ns.getOwnedAugmentations(true);
+        let installedAugs = ns.getOwnedAugmentations();
+
+        ns.tprintf("============================");
+        let mult = 1;
+        let total = 0;
+        for (let aug of allPurchaseableAugs) {
+            if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
+            ns.tprintf(
+                "%40s - %9s %s",
+                aug.name,
+                ns.nFormat(aug.price * mult, "$0.000a"),
+                aug.dep !== undefined ? aug.dep : ""
+            );
+            total += aug.price * mult;
+            mult *= 1.9;
+        }
+        ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
     }
 }

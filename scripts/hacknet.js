@@ -1,3 +1,5 @@
+import { setns, cleanLogs } from "./util.js";
+
 export const HSUpgradeType = {
     LEVEL: "level",
     RAM: "ram",
@@ -93,7 +95,7 @@ class HSUpgrade {
         let effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
 
         if (effectiveMoneyAvailable < this.upgradeCost) {
-            ns.tprintf("WARNING: Attempted to buy an upgrade you can't afford");
+            ns.print("WARNING: Attempted to buy an upgrade you can't afford");
             return false;
         }
 
@@ -152,13 +154,7 @@ function generateNewServerValue(ns) {
         ram: 1,
         timeOnline: 1,
         totalProduction: 1,
-        production: ns.formulas.hacknetServers.hashGainRate(
-            1,
-            0,
-            1,
-            1,
-            ns.getPlayer().hacknet_node_money_mult
-        ),
+        production: ns.formulas.hacknetServers.hashGainRate(1, 0, 1, 1, ns.getPlayer().hacknet_node_money_mult),
         totalCost: ns.hacknet.getPurchaseNodeCost(),
     };
     // ns.tprintf("New Server Production: %s", stats.production);
@@ -224,30 +220,38 @@ function generateNewServerValue(ns) {
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-	let buyServerUpgrade = generateNewServerValue(ns)
+    setns(ns);
+    cleanLogs();
 
-	if (ns.args[0]) {
-		let hashServerUpgrades = [buyServerUpgrade];
-        let totalProduction = 0;
-        for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
-            Object.keys(HSUpgradeType).forEach((key) => {
-                if (key !== "CACHE" && key != "SERVER")
-                    hashServerUpgrades.push(new HSUpgrade(ns, idx, HSUpgradeType[key]));
-            });
+    let prodCalc = 0;
+    for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
+        prodCalc += ns.hacknet.getNodeStats(idx).production;
+    }
 
-            totalProduction += ns.hacknet.getNodeStats(idx).production;
+    let prodIncome = (prodCalc / ns.hacknet.hashCost("Sell for Money")) * 1000000;
+    ns.tprintf("Income: %.2f h/s | %s/s", prodCalc, ns.nFormat(prodIncome, "($0.000a)"));
+
+    if (ns.hacknet.numNodes() === 0) {
+        ns.print(
+            ns.sprintf(
+                "%s | 0 hacknet nodes available, waiting for funds to buy one for %s",
+                new Date().toLocaleTimeString("it-IT"),
+                ns.nFormat(ns.hacknet.getPurchaseNodeCost(), "($0.000a)")
+            )
+        );
+    }
+
+    while (ns.hacknet.numNodes() === 0) {
+        if (ns.getPlayer().money >= ns.hacknet.getPurchaseNodeCost()) {
+            ns.hacknet.purchaseNode();
+        } else {
+            await ns.sleep(1000);
         }
+    }
 
-        hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue);
+    let buyServerUpgrade = generateNewServerValue(ns);
 
-		for (const upg of hashServerUpgrades)
-			ns.tprintf(upg.toString(ns, totalProduction))
-
-		return
-	}
-
-
-    while (true) {
+    if (ns.args[0]) {
         let hashServerUpgrades = [buyServerUpgrade];
         let totalProduction = 0;
         for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
@@ -261,24 +265,62 @@ export async function main(ns) {
 
         hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue);
 
+        for (const upg of hashServerUpgrades) ns.tprintf(upg.toString(ns, totalProduction));
+
+        return;
+    }
+
+    while (true) {
+        let hashServerUpgrades = [buyServerUpgrade];
+        let totalProduction = 0;
+        for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
+            Object.keys(HSUpgradeType).forEach((key) => {
+                if (key !== "CACHE" && key != "SERVER")
+                    hashServerUpgrades.push(new HSUpgrade(ns, idx, HSUpgradeType[key]));
+            });
+
+            totalProduction += ns.hacknet.getNodeStats(idx).production;
+        }
+
+        // if production > 20 h/s, break out and just leech
+        if (totalProduction > 20) {
+            break;
+        }
+
+        hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue);
+
         const hashBuyCost = ns.hacknet.hashCost("Sell for Money");
         let numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
         let effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
 
-        ns.tprintf("Targeting %s", hashServerUpgrades[0].toString(ns, totalProduction));
+        ns.print(
+            ns.sprintf(
+                "%s | %s",
+                new Date().toLocaleTimeString("it-IT"),
+                hashServerUpgrades[0].toString(ns, totalProduction)
+            )
+        );
         while (effectiveMoneyAvailable < hashServerUpgrades[0].upgradeCost) {
             numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
             effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
 
-            while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money")) ns.hacknet.spendHashes("Sell for Money");
+            while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money"))
+                ns.hacknet.spendHashes("Sell for Money");
 
             await ns.sleep(1000);
         }
 
         hashServerUpgrades[0].buy(ns);
 
-		buyServerUpgrade = generateNewServerValue(ns)
+        buyServerUpgrade = generateNewServerValue(ns);
 
         await ns.sleep(20);
+    }
+
+    ns.print(ns.sprintf("%s | Leeching...", new Date().toLocaleTimeString("it-IT")));
+    while (true) {
+        while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money")) ns.hacknet.spendHashes("Sell for Money");
+
+        await ns.sleep(1000);
     }
 }
