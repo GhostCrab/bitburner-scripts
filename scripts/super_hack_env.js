@@ -291,6 +291,8 @@ export class SuperHackEnv {
 
     /** @param {import(".").NS } ns */
     calcGrowThreads(ns) {
+        if (this.growMult < 1)
+            return 0
         let growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
 
         // growThreads in a simulation will probably overshoot because the actual security is too high.

@@ -221,7 +221,6 @@ export async function main(ns) {
 
     allPurchaseableAugs = allPurchaseableAugs
         .sort((a, b) => b.price - a.price)
-        .filter((a) => a.faction !== "Bachman & Associates");
 
     // reorder array to buy dependent augs first and purge augs that cant be bought
     // because of a missing dependency
