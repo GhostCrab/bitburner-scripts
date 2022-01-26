@@ -263,7 +263,7 @@ export async function main(ns) {
             totalProduction += ns.hacknet.getNodeStats(idx).production;
         }
 
-        hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue);
+        hashServerUpgrades = hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue); //.filter(a => (a.upgradeValue * 1000000000) > 1.5);
 
         for (const upg of hashServerUpgrades) ns.tprintf(upg.toString(ns, totalProduction));
 
@@ -282,35 +282,39 @@ export async function main(ns) {
             totalProduction += ns.hacknet.getNodeStats(idx).production;
         }
 
-        // if production > 20 h/s, break out and just leech
-        if (totalProduction > 40) {
-            break;
-        }
+        hashServerUpgrades = hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue).filter(a => (a.upgradeValue * 1000000000) > 0.15);
+        //hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue);
 
-        hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue);
+        if (hashServerUpgrades.length > 0) {
 
-        const hashBuyCost = ns.hacknet.hashCost("Sell for Money");
-        let numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
-        let effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
+            const hashBuyCost = ns.hacknet.hashCost("Sell for Money");
+            let numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
+            let effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
 
-        ns.print(
-            ns.sprintf(
-                "%s | %s",
-                new Date().toLocaleTimeString("it-IT"),
-                hashServerUpgrades[0].toString(ns, totalProduction)
-            )
-        );
-        while (effectiveMoneyAvailable < hashServerUpgrades[0].upgradeCost) {
-            numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
-            effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
+            ns.print(
+                ns.sprintf(
+                    "%s | %s",
+                    new Date().toLocaleTimeString("it-IT"),
+                    hashServerUpgrades[0].toString(ns, totalProduction)
+                )
+            );
+            while (effectiveMoneyAvailable < hashServerUpgrades[0].upgradeCost) {
+                numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
+                effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;
 
+                while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money"))
+                    ns.hacknet.spendHashes("Sell for Money");
+
+                await ns.sleep(1000);
+            }
+
+            hashServerUpgrades[0].buy(ns);
+        } else {
             while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money"))
                 ns.hacknet.spendHashes("Sell for Money");
 
             await ns.sleep(1000);
         }
-
-        hashServerUpgrades[0].buy(ns);
 
         buyServerUpgrade = generateNewServerValue(ns);
 
@@ -326,7 +330,7 @@ export async function main(ns) {
 
     while (true) {
         //let studyCost = ns.hacknet.hashCost("Increase Maximum Money");
-        let studyCost = ns.hacknet.hashCost("Reduce Minimum Security");
+        let studyCost = ns.hacknet.hashCost("Improve Studying");
 
         while (ns.hacknet.hashCapacity() < studyCost) {
             while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money"))
@@ -354,7 +358,7 @@ export async function main(ns) {
         while (ns.hacknet.numHashes() < studyCost) await ns.sleep(1000);
 
         //ns.hacknet.spendHashes("Increase Maximum Money", "phantasy");
-        ns.hacknet.spendHashes("Reduce Minimum Security", "ecorp");
+        ns.hacknet.spendHashes("Improve Studying");
 
         await ns.sleep(20);
     }

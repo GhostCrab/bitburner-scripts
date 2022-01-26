@@ -100,7 +100,7 @@ class Augmentation {
 
 async function doBackdoors(ns) {
     //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a", "ecorp", "fulcrumassets", "fulcrumtech"];
-    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
+    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "ecorp"];
     //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "omnitek", "kuai-gong", "megacorp"];
     let hosts = mapHosts();
 
@@ -114,6 +114,7 @@ async function doBackdoors(ns) {
         )
             continue;
 
+        ns.print(hostName);
         for (const hostHopName of trail) {
             ns.connect(hostHopName);
         }
@@ -219,8 +220,7 @@ export async function main(ns) {
         }
     }
 
-    allPurchaseableAugs = allPurchaseableAugs
-        .sort((a, b) => b.price - a.price)
+    allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price);
 
     // reorder array to buy dependent augs first and purge augs that cant be bought
     // because of a missing dependency
