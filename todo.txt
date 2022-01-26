@@ -20,6 +20,8 @@
     [ ] basic/brute implementation can be to quit on basic limits (max aug/domation limit/faction join limit) and
         move on to the faction with the next highest rep that has not hit the limits
 [ ] NEW: write orchestrator to distribute and execute share.js script
+[ ] super_hack_env.js: account for mid-batch increases to hack level
+[ ] super_hack_env.js: merge Weaken and Grow-Weaken steps when they can be combined
 
 
 === Bitnodes ===
