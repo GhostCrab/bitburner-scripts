@@ -19,7 +19,17 @@ class HSUpgrade {
 
         let stats;
         if (_stats) stats = _stats;
-        else stats = ns.hacknet.getNodeStats(id);
+        else {
+            stats = ns.hacknet.getNodeStats(id);
+            stats.ramUsed = 0;
+            stats.production = ns.formulas.hacknetServers.hashGainRate(
+                stats.level,
+                0,
+                stats.ram,
+                stats.cores,
+                ns.getPlayer().hacknet_node_money_mult
+            );
+        }
 
         this.id = id;
         this.type = type;
@@ -225,7 +235,17 @@ export async function main(ns) {
 
     let prodCalc = 0;
     for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
-        prodCalc += ns.hacknet.getNodeStats(idx).production;
+        let stats = ns.hacknet.getNodeStats(idx);
+        stats.ramUsed = 0;
+        stats.production = ns.formulas.hacknetServers.hashGainRate(
+            stats.level,
+            0,
+            stats.ram,
+            stats.cores,
+            ns.getPlayer().hacknet_node_money_mult
+        );
+
+        prodCalc += stats.production;
     }
 
     let prodIncome = (prodCalc / ns.hacknet.hashCost("Sell for Money")) * 1000000;
@@ -255,12 +275,22 @@ export async function main(ns) {
         let hashServerUpgrades = [buyServerUpgrade];
         let totalProduction = 0;
         for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
+            let stats = ns.hacknet.getNodeStats(idx);
+            stats.ramUsed = 0;
+            stats.production = ns.formulas.hacknetServers.hashGainRate(
+                stats.level,
+                0,
+                stats.ram,
+                stats.cores,
+                ns.getPlayer().hacknet_node_money_mult
+            );
+
             Object.keys(HSUpgradeType).forEach((key) => {
                 if (key !== "CACHE" && key != "SERVER")
-                    hashServerUpgrades.push(new HSUpgrade(ns, idx, HSUpgradeType[key]));
+                    hashServerUpgrades.push(new HSUpgrade(ns, idx, HSUpgradeType[key], stats));
             });
 
-            totalProduction += ns.hacknet.getNodeStats(idx).production;
+            totalProduction += stats.production;
         }
 
         hashServerUpgrades = hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue); //.filter(a => (a.upgradeValue * 1000000000) > 1.5);
@@ -274,19 +304,28 @@ export async function main(ns) {
         let hashServerUpgrades = [buyServerUpgrade];
         let totalProduction = 0;
         for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
+            let stats = ns.hacknet.getNodeStats(idx);
+            stats.ramUsed = 0;
+            stats.production = ns.formulas.hacknetServers.hashGainRate(
+                stats.level,
+                0,
+                stats.ram,
+                stats.cores,
+                ns.getPlayer().hacknet_node_money_mult
+            );
+
             Object.keys(HSUpgradeType).forEach((key) => {
                 if (key !== "CACHE" && key != "SERVER")
-                    hashServerUpgrades.push(new HSUpgrade(ns, idx, HSUpgradeType[key]));
+                    hashServerUpgrades.push(new HSUpgrade(ns, idx, HSUpgradeType[key], stats));
             });
 
-            totalProduction += ns.hacknet.getNodeStats(idx).production;
+            totalProduction += stats.production;
         }
 
-        hashServerUpgrades = hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue).filter(a => (a.upgradeValue * 1000000000) > 0.15);
+        hashServerUpgrades = hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue); //.filter(a => (a.upgradeValue * 1000000000) > 0.15);
         //hashServerUpgrades.sort((a, b) => b.upgradeValue - a.upgradeValue);
 
         if (hashServerUpgrades.length > 0) {
-
             const hashBuyCost = ns.hacknet.hashCost("Sell for Money");
             let numHashBuys = Math.floor(ns.hacknet.numHashes() / hashBuyCost);
             let effectiveMoneyAvailable = ns.getPlayer().money + numHashBuys * 1000000;

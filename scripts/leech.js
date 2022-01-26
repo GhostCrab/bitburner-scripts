@@ -1,12 +1,12 @@
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    while (true) {
+    while (false) {
         while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money")) ns.hacknet.spendHashes("Sell for Money");
         await ns.sleep(1000);
     }
 
     while (true) {
-        let studyCost = ns.hacknet.hashCost("Improve Studying");
+        let studyCost = ns.hacknet.hashCost("Increase Maximum Money");
 
         while (ns.hacknet.hashCapacity() < studyCost) {
             while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money"))
@@ -33,7 +33,7 @@ export async function main(ns) {
 
         while (ns.hacknet.numHashes() < studyCost) await ns.sleep(1000);
 
-        ns.hacknet.spendHashes("Improve Studying");
+        ns.hacknet.spendHashes("Increase Maximum Money", "4sigma");
 
         await ns.sleep(20);
     }
