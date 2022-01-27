@@ -77,7 +77,7 @@ class Augmentation {
 
     isHackUseful() {
         if (this.name === "Neuroflux Governor") return false;
-        return true;
+        //return true;
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
         if (this.stats.hacking_chance_mult) return true;
@@ -100,7 +100,7 @@ class Augmentation {
 
 async function doBackdoors(ns) {
     //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a", "ecorp", "fulcrumassets", "fulcrumtech"];
-    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "ecorp"];
+    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
     //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "omnitek", "kuai-gong", "megacorp"];
     let hosts = mapHosts();
 
@@ -263,7 +263,7 @@ export async function main(ns) {
         ns.tprintf("============================");
         let mult = 1;
         let total = 0;
-        for (let aug of allPurchaseableAugs) {
+        for (let aug of allPurchaseableAugs.filter(a => a.name !== "The Red Pill")) {
             if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
             ns.tprintf(
                 "%40s - %9s %s",

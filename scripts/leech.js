@@ -33,7 +33,7 @@ export async function main(ns) {
 
         while (ns.hacknet.numHashes() < studyCost) await ns.sleep(1000);
 
-        ns.hacknet.spendHashes("Increase Maximum Money", "4sigma");
+        ns.hacknet.spendHashes("Increase Maximum Money", "phantasy");
 
         await ns.sleep(20);
     }

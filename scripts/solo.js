@@ -33,7 +33,7 @@ export async function main(ns) {
         await env.init(ns);
 
         while (true) {
-            env.refresh(ns);
+            await env.refresh(ns);
             await ns.sleep(2000);
         }
     }

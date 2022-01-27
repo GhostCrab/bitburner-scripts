@@ -1,5 +1,5 @@
 export const debug = false;
-export const TSPACER = 100;
+export const TSPACER = 300;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
@@ -191,7 +191,7 @@ export class SuperHackEnv {
         if (hostnames)
             this.hosts = hostnames
                 .map((x) => new Host(ns, x, this.threadSize), this)
-                .filter((x) => x.maxThreads > 0)    
+                .filter((x) => x.maxThreads > 0)
                 .sort((a, b) => b.maxThreads - a.maxThreads);
 
         this.maxThreads = 0;
@@ -291,8 +291,7 @@ export class SuperHackEnv {
 
     /** @param {import(".").NS } ns */
     calcGrowThreads(ns) {
-        if (this.growMult < 1)
-            return 0
+        if (this.growMult < 1) return 0;
         let growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
 
         // growThreads in a simulation will probably overshoot because the actual security is too high.
@@ -346,7 +345,7 @@ export class SuperHackEnv {
     }
 
     /** @param {import(".").NS } ns */
-    refresh(ns) {
+    async refresh(ns) {
         if (this.isWRunning(ns)) {
             // process in progress, wait for next refresh to update
             return;
@@ -420,20 +419,20 @@ export class SuperHackEnv {
         switch (this.state) {
             case HackState.W:
                 this.updateForW(ns);
-                this.execW(ns);
+                await this.execW(ns);
                 break;
             case HackState.GW:
                 this.updateForGW(ns);
-                this.execGW(ns);
+                await this.execGW(ns);
                 break;
             case HackState.HW:
                 this.updateForHW(ns);
-                this.execHW(ns);
+                await this.execHW(ns);
                 break;
             case HackState.HGW:
                 // setState calls updateForHGW() to do evaluation, dont call it again here
                 //this.updateForHGW(ns);
-                this.execHGW(ns);
+                await this.execHGW(ns);
                 break;
             default:
             // Do Nothing
@@ -884,9 +883,46 @@ export class SuperHackEnv {
         return true;
     }
 
-    execute(ns) {
+    async execute(ns) {
+        let execs = [];
         for (const host of this.hosts) {
-            host.executeScripts(ns, this.targetname);
+            for (const scriptCall of host.reservedScriptCalls) {
+                if ("args" in scriptCall) {
+                    // offset is scriptCall.args[1]
+                    execs.push({
+                        script: scriptCall.script,
+                        host: host.hostname,
+                        threads: scriptCall.threads,
+                        target: this.targetname,
+                        delay: scriptCall.args[1],
+                        args: scriptCall.args,
+                        pos: execs.length,
+                    });
+                    //ns.exec(scriptCall.script, host.hostname, scriptCall.threads, ...scriptCall.args);
+                } else {
+                    execs.push({
+                        script: scriptCall.script,
+                        host: host.hostname,
+                        threads: scriptCall.threads,
+                        target: this.targetname,
+                        delay: scriptCall.offset,
+                        pos: execs.length,
+                    });
+                    //ns.exec(scriptCall.script, host.hostname, scriptCall.threads, target, scriptCall.offset);
+                }
+            }
+        }
+
+        execs = execs.sort((a, b) => a.delay - b.delay);
+
+        let startTime = Date.now();
+        for (let exec of execs) {
+            //ns.tprintf("Queuing   %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
+            while (Date.now() - startTime < exec.delay) {
+                await ns.sleep(20);
+            }
+            //ns.tprintf("Executing %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
+            ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
         }
     }
 
@@ -897,7 +933,7 @@ export class SuperHackEnv {
     }
 
     /** @param {import(".").NS } ns */
-    execW(ns) {
+    async execW(ns) {
         if (this.simEnabled) {
             this.simTarget.hackDifficulty -= this.weakenThreads * this.weakenAmountPerThread;
             this.simTarget.hackDifficulty = Math.max(
@@ -918,12 +954,10 @@ export class SuperHackEnv {
             this.weakenTime,
             this.targetname,
             ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
-            this.state
+            this.state,
         ]);
 
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreads);
-        this.execute(ns);
-        this.resetThreads();
 
         ns.print(
             ns.sprintf(
@@ -935,10 +969,13 @@ export class SuperHackEnv {
                 stdFormat(ns, this.weakenTime)
             )
         );
+
+        await this.execute(ns);
+        this.resetThreads();
     }
 
     /** @param {import(".").NS } ns */
-    execGW(ns) {
+    async execGW(ns) {
         if (this.simEnabled) {
             let simGrowMult = ns.formulas.hacking.growPercent(
                 this.simTarget,
@@ -973,15 +1010,13 @@ export class SuperHackEnv {
             this.weakenTime,
             this.targetname,
             ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
-            this.state
+            this.state,
         ]);
 
         // start grow such that it finishes slightly before weaken
         let growOffsetTime = this.weakenTime - this.tspacer - this.growTime;
         this.reserveThreadsForExecution(ns, GROWNS, this.growThreads, growOffsetTime);
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsGrow);
-        this.execute(ns);
-        this.resetThreads();
 
         ns.print(
             ns.sprintf(
@@ -995,10 +1030,13 @@ export class SuperHackEnv {
                 stdFormat(ns, this.weakenTime)
             )
         );
+
+        await this.execute(ns);
+        this.resetThreads();
     }
 
     /** @param {import(".").NS } ns */
-    execHW(ns) {
+    async execHW(ns) {
         if (this.simEnabled) {
             let hackChance = ns.formulas.hacking.hackChance(this.simTarget, this.simPlayer);
             let hackTotal = 0;
@@ -1036,15 +1074,13 @@ export class SuperHackEnv {
             this.weakenTime,
             this.targetname,
             ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
-            this.state
+            this.state,
         ]);
 
         // start hack such that it finishes slightly before weaken
         let hackOffsetTime = this.weakenTime - this.tspacer - this.hackTime;
         this.reserveThreadsForExecution(ns, HACKNS, this.hackThreads, hackOffsetTime);
         this.reserveThreadsForExecution(ns, WEAKENNS, this.weakenThreadsHack);
-        this.execute(ns);
-        this.resetThreads();
 
         ns.print(
             ns.sprintf(
@@ -1058,10 +1094,13 @@ export class SuperHackEnv {
                 stdFormat(ns, this.weakenTime)
             )
         );
+
+        await this.execute(ns);
+        this.resetThreads();
     }
 
     /** @param {import(".").NS } ns */
-    execHGW(ns) {
+    async execHGW(ns) {
         if (this.simEnabled) {
             // HACK
             let hackChance = ns.formulas.hacking.hackChance(this.simTarget, this.simPlayer);
@@ -1141,12 +1180,8 @@ export class SuperHackEnv {
                     this.weakenThreadsGrow,
                     cycleOffsetTime + weakenGrowOffsetTime
                 );
-                
             }
         }
-
-        this.execute(ns);
-        this.resetThreads();
 
         let port = ns.getPortHandle(1);
         port.clear();
@@ -1155,7 +1190,7 @@ export class SuperHackEnv {
             this.cycleBatchTime,
             this.targetname,
             ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
-            this.state
+            this.state,
         ]);
 
         ns.print(
@@ -1177,6 +1212,9 @@ export class SuperHackEnv {
                 stdFormat(ns, this.cycleBatchTime)
             )
         );
+
+        await this.execute(ns);
+        this.resetThreads();
     }
 
     /** @param {import(".").NS } ns */
