@@ -1155,7 +1155,7 @@ export class SuperHackEnv {
             return;
         }
 
-        if (true) {
+        if (false) {
             this.currentTime = Date.now() - this.bst;
 
             for (let i = 0; i < this.cycleTotal; i++) {
