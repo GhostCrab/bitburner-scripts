@@ -90,7 +90,8 @@ class Augmentation {
             this.name === "BitRunners Neurolink" ||
             this.name === "CashRoot Starter Kit" ||
             this.name === "PCMatrix" ||
-            this.name === "Neuroreceptor Management Implant"
+            this.name === "Neuroreceptor Management Implant" ||
+            this.name === "The Red Pill"
         )
             return true;
 
