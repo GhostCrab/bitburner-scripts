@@ -588,7 +588,7 @@ export class SuperHackEnv {
         this.cycleFullTime = this.weakenTime + this.tspacer * 2;
         this.cycleFitTime = this.weakenTime - this.tspacer * 2; // Start hack start script on last cycle before this time
         let hackStartTime = this.weakenTime - this.hackTime - this.tspacer;
-        this.cycleMax = Math.floor((this.cycleFitTime - hackStartTime) / this.cycleSpacer) + 1;
+        this.cycleMax = Math.floor((this.hackTime - this.tspacer) / this.cycleSpacer);
 
         this.threadsPerCycle = this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
 
