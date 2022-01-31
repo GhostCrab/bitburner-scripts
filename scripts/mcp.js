@@ -257,24 +257,63 @@ export async function main(ns) {
         }
     }
 
-    if (allPurchaseableAugs.length > 0) {
-        let ownedAugs = ns.getOwnedAugmentations(true);
-        let installedAugs = ns.getOwnedAugmentations();
+    // if (allPurchaseableAugs.length > 0) {
+    //     ns.tprintf("============================");
+    //     let mult = 1;
+    //     let total = 0;
+    //     for (let aug of allPurchaseableAugs.filter(a => a.name !== "The Red Pill")) {
+    //         if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
+    //         ns.tprintf(
+    //             "%40s - %9s %s",
+    //             aug.name,
+    //             ns.nFormat(aug.price * mult, "$0.000a"),
+    //             aug.dep !== undefined ? aug.dep : ""
+    //         );
+    //         total += aug.price * mult;
+    //         mult *= 1.9;
+    //     }
+    //     ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
+    // }
 
+    if (allPurchaseableAugs.length > 0) {
         ns.tprintf("============================");
         let mult = 1;
-        let total = 0;
-        for (let aug of allPurchaseableAugs.filter(a => a.name !== "The Red Pill")) {
-            if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
+        let total = Number.MAX_SAFE_INTEGER;
+        let startAug = 0;
+        let purchaseableAugs = allPurchaseableAugs.filter(a => a.name !== "The Red Pill")
+        while (startAug < purchaseableAugs.length) {
+            total = 0
+            mult = 1
+            for (let augIdx = startAug; augIdx < purchaseableAugs.length; augIdx++) {
+                total += purchaseableAugs[augIdx].price * mult;
+                mult *= 1.9;
+            }
+
+            if (total < ns.getPlayer().money)
+                break;
+            
+            startAug++
+        }
+
+        if (startAug === purchaseableAugs.length) {
+            ns.tprintf("All augs too expensive")
+            return
+        }
+
+        total = 0
+        mult = 1
+        for (let augIdx = startAug; augIdx < purchaseableAugs.length; augIdx++) {
+            if (ns.args[0]) ns.purchaseAugmentation(purchaseableAugs[augIdx].faction, purchaseableAugs[augIdx].name);
             ns.tprintf(
                 "%40s - %9s %s",
-                aug.name,
-                ns.nFormat(aug.price * mult, "$0.000a"),
-                aug.dep !== undefined ? aug.dep : ""
+                purchaseableAugs[augIdx].name,
+                ns.nFormat(purchaseableAugs[augIdx].price * mult, "$0.000a"),
+                purchaseableAugs[augIdx].dep !== undefined ? purchaseableAugs[augIdx].dep : ""
             );
-            total += aug.price * mult;
+            total += purchaseableAugs[augIdx].price * mult;
             mult *= 1.9;
         }
+
         ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
     }
 }

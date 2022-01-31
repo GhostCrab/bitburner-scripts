@@ -10,7 +10,7 @@ export async function main(ns) {
         while (ns.gang.canRecruitMember()) {
             let name = "g" + memberIndex.toString();
             ns.gang.recruitMember(name);
-            ns.gang.setMemberTask(name, "Train Combat");
+            ns.gang.setMemberTask(name, "Train Hacking");
             memberIndex++;
         }
 
@@ -24,22 +24,22 @@ export async function main(ns) {
                 ns.sprintf(
                     "%3s:  %10s  %s  %s  %s %10s %s",
                     member.name,
-                    member.str_exp.toFixed(2),
-                    member.str_mult.toFixed(2),
-                    member.str_asc_mult.toFixed(2),
-                    ascmem !== undefined ? ascmem.str : 0,
-                    member.str_asc_points.toFixed(2),
+                    member.hack_exp.toFixed(2),
+                    member.hack_mult.toFixed(2),
+                    member.hack_asc_mult.toFixed(2),
+                    ascmem !== undefined ? ascmem.hack : 0,
+                    member.hack_asc_points.toFixed(2),
                     member.upgrades
                 )
             );
 
-            if (ascmem !== undefined && ascmem.str > 2) {
+            if (ascmem !== undefined && ascmem.hack > 2) {
                 ns.print(
                     ns.sprintf(
                         "Ascending %s %.2f => %.2f hack multiplier",
                         member.name,
-                        member.str_asc_mult,
-                        member.str_asc_mult * ascmem.str
+                        member.hack_asc_mult,
+                        member.hack_asc_mult * ascmem.hack
                     )
                 );
 
@@ -57,14 +57,7 @@ export async function main(ns) {
                     ns.gang.getEquipmentStats(_name)
                 )
             )
-            .filter(
-                (eq) =>
-                    eq.str !== undefined ||
-                    eq.dex !== undefined ||
-                    eq.agi !== undefined ||
-                    eq.def !== undefined ||
-                    eq.cha !== undefined
-            )
+            .filter((eq) => eq.hack !== undefined)
             .sort((a, b) => a.price - b.price);
 
         // for (const eq of combatEquipment) {
@@ -72,7 +65,7 @@ export async function main(ns) {
         //         "%-13s %20s  %.2f  %9s",
         //         eq.type,
         //         eq.name,
-        //         eq.str !== undefined ? eq.str : 0,
+        //         eq.hack !== undefined ? eq.hack : 0,
         //         ns.nFormat(eq.price, "($0.000a)")
         //     ));
         // }
@@ -91,8 +84,12 @@ export async function main(ns) {
 
         newBuys.sort((a, b) => a.equipment.price - b.equipment.price);
 
+        if (ns.getPlayer().money >= ns.getUpgradeHomeRamCost()) {
+            ns.upgradeHomeRam();
+        }
+
         for (const buy of newBuys) {
-            if (ns.getPlayer().money > buy.equipment.price) {
+            if (ns.getPlayer().money * 0.25 > buy.equipment.price) {
                 let result = ns.gang.purchaseEquipment(buy.member.name, buy.equipment.name);
                 if (result)
                     ns.print(
@@ -109,7 +106,6 @@ export async function main(ns) {
         await ns.sleep(10000);
 
         ns.print(ns.sprintf("=================================="));
-        break;
     }
 
     const tasks = ns.gang

@@ -43,14 +43,14 @@ export async function main(ns) {
     //     ns.tprintf("%16s  %9s %5s %9s/s", crimeStats.name, ns.nFormat(crimeStats.money, "($0.000a)"), stFormat(ns, crimeStats.time, false), ns.nFormat(crimeStats.money / (crimeStats.time / 1000), "($0.000a)"));
     // }
 
-    while (!ns.getPlayer().factions.includes("Slum Snakes")) {
-        await ns.sleep(ns.commitCrime("mug") + 200);
+    while (true) {// (!ns.getPlayer().factions.includes("NiteSec")) {
+        await ns.sleep(ns.commitCrime("larceny") + 200);
 
         let allFactions = ns.getPlayer().factions.concat(ns.checkFactionInvitations());
-        if (allFactions.includes("Slum Snakes")) {
-            ns.joinFaction("Slum Snakes")
+        if (allFactions.includes("NiteSec")) {
+            ns.joinFaction("NiteSec")
         }
     }
 
-    ns.workForFaction("Slum Snakes", "Field Work");
+    ns.workForFaction("NiteSec", "Field Work");
 }

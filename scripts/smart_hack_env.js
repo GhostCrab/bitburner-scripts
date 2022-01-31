@@ -1,5 +1,5 @@
 export const debug = false;
-export const TSPACER = 300;
+export const TSPACER = 100;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
@@ -72,16 +72,16 @@ class Host {
 
     // update max threads in case server size has changed
     getMaxThreads(ns) {
-        // this.maxThreads = Math.floor(ns.getServerMaxRam(this.hostname) / this.threadSize);
+        this.maxThreads = Math.floor(ns.getServerMaxRam(this.hostname) / this.threadSize);
 
-        // // if this host is home, reserve 64GB of ram for other stuff
-        // if (this.hostname === "home") {
-        //     let homeram = ns.getServerMaxRam(this.hostname) - 64;
-        //     this.maxThreads = Math.max(0, Math.floor(homeram / this.threadSize));
-        // }
+        // if this host is home, reserve 64GB of ram for other stuff
+        if (this.hostname === "home") {
+            let homeram = ns.getServerMaxRam(this.hostname) - 64;
+            this.maxThreads = Math.max(0, Math.floor(homeram / this.threadSize));
+        }
 
-        // return this.maxThreads;
-        return (this.maxThreads = 100000);
+        return this.maxThreads;
+        //return (this.maxThreads = 2859);
     }
 
     async prep(ns, force = false) {
@@ -117,8 +117,8 @@ export class SmartHackEnv {
         this.weakenStartSec = 0;
         this.weakenAmountPerThread = 0;
         this.weakenThreads = 0;
-        this.weakenThreadsGrow = 0;
-        this.weakenThreadsHack = 0;
+        this.weakenGrowThreads = 0;
+        this.weakenHackThreads = 0;
         this.weakenTime = 0;
         this.weakenTimeFullCycle = 0;
 
@@ -155,7 +155,7 @@ export class SmartHackEnv {
     }
 
     async init(ns, force = false) {
-        for (const host of this.hosts) await host.prep(ns, force);
+        await this.host.prep(ns, force);
     }
 
     resetSim(ns) {
@@ -227,10 +227,11 @@ export class SmartHackEnv {
 
     /** @param {import(".").NS } ns */
     async refresh(ns) {
-        // if (this.isWRunning(ns)) {
-        //     // process in progress, wait for next refresh to update
-        //     return;
-        // }
+        if (this.isWRunning(ns)) {
+            // process in progress, wait for next refresh to update
+            await ns.sleep(1000);
+            return;
+        }
 
         // Host state
         this.maxThreads = this.host.getMaxThreads(ns);
@@ -261,7 +262,7 @@ export class SmartHackEnv {
         this.cycleFullTime = this.weakenTime + this.tspacer * 2;
         this.cycleMax = Math.floor((this.hackTime - this.tspacer) / this.cycleSpacer);
 
-        this.threadsPerCycle = this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
+        this.threadsPerCycle = this.hackThreads + this.weakenHackThreads + this.growThreads + this.weakenGrowThreads;
 
         // Primary Cycle Info
         let primaryGrowMult = Math.max(this.highMoney / this.money, 1);
@@ -278,7 +279,7 @@ export class SmartHackEnv {
         }
 
         let allCycles = [];
-        //let cycleStep = Math.floor(this.cycleMax / 10)
+        //let cycleStep = Math.max(Math.floor(this.cycleMax / 10), 1)
         let cycleStep = 1;
         for (let cycleTotal = 1; cycleTotal <= this.cycleMax; cycleTotal += cycleStep) {
             if (cycleTotal === 1 && primaryThreadsTotal > 0) {
@@ -294,8 +295,8 @@ export class SmartHackEnv {
 
             let cycleThreadAllowance = Math.floor(usableThreads / usableCycles);
 
-            let hackThreads = 1 / this.hackPercentPerThread - 1;
-            //let hackThreadStep = Math.floor(hackThreads / 25);
+            let hackThreads = Math.floor(1 / this.hackPercentPerThread - 1);
+            //let hackThreadStep = Math.max(Math.floor(hackThreads / 25), 1);
             let hackThreadStep = 1;
             let hackTotal = this.hackPercentPerThread * hackThreads * this.highMoney;
             let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
@@ -353,86 +354,64 @@ export class SmartHackEnv {
         allCycles = allCycles.sort((a, b) => b.production - a.production);
 
         for (const cycle of allCycles) {
+            break;
             let batchThreads =
                 cycle.hackThreads + cycle.growThreads + cycle.weakenHackThreads + cycle.weakenGrowThreads;
             if (cycle.hackThreads === undefined) batchThreads = 0;
-            let cycleThreads = primaryThreadsTotal + batchThreads * cycle.cycleTotal;
+            let cycleThreads = primaryThreadsTotal + batchThreads * (cycle.cycleTotal - 1);
+            if (primaryThreadsTotal === 0) {
+                cycleThreads = batchThreads * cycle.cycleTotal;
+            }
             let cycleMem = cycleThreads * this.threadSize;
             ns.tprintf(
-                "%3d  %9s/s %5.2f %4d/%5d %6dGB",
+                "%3d  %9s/s %5.2f %d/%4d/%5d %6dGB",
                 cycle.cycleTotal,
                 ns.nFormat(cycle.production, "($0.000a)"),
                 cycle.percentPerCycle ? cycle.percentPerCycle : 0,
+                primaryThreadsTotal,
                 batchThreads,
                 cycleThreads,
                 cycleMem
             );
         }
 
-        //execHGW(ns);
-    }
+        let cycleTarget = allCycles[0];
+        this.hackThreads = cycleTarget.hackThreads;
+        this.growThreads = cycleTarget.growThreads;
+        this.weakenHackThreads = cycleTarget.weakenHackThreads;
+        this.weakenGrowThreads = cycleTarget.weakenGrowThreads;
+        this.cycleTotal = cycleTarget.cycleTotal;
+        this.cycleBatchTime = cycleTarget.fullCycleTime;
 
-    async execute(ns) {
-        let execs = [];
-        for (const host of this.hosts) {
-            for (const scriptCall of host.reservedScriptCalls) {
-                if ("args" in scriptCall) {
-                    // offset is scriptCall.args[1]
-                    execs.push({
-                        script: scriptCall.script,
-                        host: host.hostname,
-                        threads: scriptCall.threads,
-                        target: this.targetname,
-                        delay: scriptCall.args[1],
-                        args: scriptCall.args,
-                        pos: execs.length,
-                    });
-                    //ns.exec(scriptCall.script, host.hostname, scriptCall.threads, ...scriptCall.args);
-                } else {
-                    execs.push({
-                        script: scriptCall.script,
-                        host: host.hostname,
-                        threads: scriptCall.threads,
-                        target: this.targetname,
-                        delay: scriptCall.offset,
-                        pos: execs.length,
-                    });
-                    //ns.exec(scriptCall.script, host.hostname, scriptCall.threads, target, scriptCall.offset);
-                }
-            }
-        }
-
-        execs = execs.sort((a, b) => a.delay - b.delay);
-
-        let startTime = Date.now();
-        for (let exec of execs) {
-            //ns.tprintf("Queuing   %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
-            while (Date.now() - startTime < exec.delay) {
-                await ns.sleep(20);
-            }
-            //ns.tprintf("Executing %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
-            ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
-        }
-    }
-
-    resetThreads() {
-        for (const host of this.hosts) {
-            host.reset();
-        }
-    }
-
-    /** @param {import(".").NS } ns */
-    async execHGW(ns) {
         let weakenGrowOffsetTime = this.tspacer * 2;
         let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
         let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
 
-        for (let i = this.cycleTotal - 1; i >= 0; i--) {
+        if (primaryThreadsTotal > 0) {
+            if (primaryGrowThreads > 0)
+                this.host.tryReserveThreads(ns, GROWNS, primaryGrowThreads, growOffsetTime);
+            if (primaryWeakenThreads > 0)
+                this.host.tryReserveThreads(ns, WEAKENNS, primaryWeakenThreads, weakenGrowOffsetTime);
+
+            ns.print(
+                ns.sprintf(
+                    "%8s SMART-PRIMARY: %s => Grow %d; Weaken %d; Total Threads %d",
+                    new Date().toLocaleTimeString("it-IT"),
+                    this.targetname,
+                    primaryGrowThreads,
+                    primaryWeakenThreads,
+                    primaryThreadsTotal
+                )
+            );
+        }
+
+        for (let i = 0; i < this.cycleTotal; i++) {
+            if (primaryThreadsTotal > 0 && i === 0) continue;
             let cycleOffsetTime = i * this.cycleSpacer;
             this.host.tryReserveThreads(ns, HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
             this.host.tryReserveThreads(ns, GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
-            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenThreadsHack, cycleOffsetTime);
-            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenThreadsGrow, cycleOffsetTime + weakenGrowOffsetTime);
+            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenHackThreads, cycleOffsetTime);
+            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenGrowThreads, cycleOffsetTime + weakenGrowOffsetTime);
         }
 
         let port = ns.getPortHandle(1);
@@ -442,18 +421,18 @@ export class SmartHackEnv {
             this.cycleBatchTime,
             this.targetname,
             ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
-            this.state,
+            "SMART",
         ]);
 
         ns.print(
             ns.sprintf(
-                "%8s HACK-GROW-WEAKEN: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time +%s:+%s [%s:%s]",
+                "%8s SMART: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time +%s:+%s [%s:%s]",
                 new Date().toLocaleTimeString("it-IT"),
                 this.targetname,
                 this.hackThreads,
                 this.growThreads,
-                this.weakenThreadsHack,
-                this.weakenThreadsGrow,
+                this.weakenHackThreads,
+                this.weakenGrowThreads,
                 this.threadsPerCycle,
                 this.threadsPerCycle * this.cycleTotal,
                 this.cycleTotal,
@@ -469,16 +448,41 @@ export class SmartHackEnv {
         this.resetThreads();
     }
 
+    async execute(ns) {
+        let execs = [];
+        for (const scriptCall of this.host.reservedScriptCalls) {
+            execs.push({
+                script: scriptCall.script,
+                host: this.host.hostname,
+                threads: scriptCall.threads,
+                target: this.targetname,
+                delay: scriptCall.offset,
+                pos: execs.length,
+            });
+        }
+
+        execs = execs.sort((a, b) => a.delay - b.delay);
+
+        let startTime = Date.now();
+        for (let exec of execs) {
+            while (Date.now() - startTime < exec.delay) await ns.sleep(20);
+
+            ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
+        }
+    }
+
+    resetThreads() {
+        this.host.reset();
+    }
+
     /** @param {import(".").NS } ns */
     isWRunning(ns) {
         if (this.simEnabled) return false;
 
-        for (const host of this.hosts) {
-            let ps = ns.ps(host.hostname);
-            for (let psInfo of ps) {
-                if (psInfo.filename === WEAKENNS && psInfo.args.includes(this.targetname)) {
-                    return true;
-                }
+        let ps = ns.ps(this.host.hostname);
+        for (let psInfo of ps) {
+            if (psInfo.filename === WEAKENNS && psInfo.args.includes(this.targetname)) {
+                return true;
             }
         }
 

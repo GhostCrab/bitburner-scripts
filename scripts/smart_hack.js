@@ -7,7 +7,10 @@ export async function main(ns) {
 
     cleanLogs();
 
-    let env = new SmartHackEnv(ns, "phantasy", "home");
+    let env = new SmartHackEnv(ns, ns.args[1], ns.args[0]);
+    await env.init(ns)
 
-    await env.refresh(ns);
+    while (true) {
+        await env.refresh(ns);
+    }
 }
