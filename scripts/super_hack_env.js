@@ -903,11 +903,11 @@ export class SuperHackEnv {
 
         let startTime = Date.now();
         for (let exec of execs) {
-            //ns.tprintf("Queuing   %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
+            ns.tprintf("Queuing   %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
             while (Date.now() - startTime < exec.delay) {
                 await ns.sleep(20);
             }
-            //ns.tprintf("Executing %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
+            ns.tprintf("Executing %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
             ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
         }
     }

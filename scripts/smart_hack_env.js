@@ -1,5 +1,5 @@
 export const debug = false;
-export const TSPACER = 50;
+export const TSPACER = 100;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
@@ -186,7 +186,7 @@ class Host {
             this.maxThreads = Math.max(0, Math.floor(homeram / this.threadSize));
         }
 
-        this.maxThreads = Math.min(1000000, this.maxThreads)
+        this.maxThreads = Math.min(1000000, this.maxThreads);
 
         return this.maxThreads;
     }
@@ -418,6 +418,10 @@ export class SmartHackEnv {
 
             let cycleStats = cycleProductionLookup[cycleThreadAllowance];
 
+            if (cycleStats === undefined) {
+                ns.print(ns.sprintf("WARNING: Thread Total %s is undefined", cycleThreadAllowance));
+                continue;
+            }
             allCycles.push({
                 cycleTotal: cycleTotal,
                 hackTotal: cycleStats.hackTotal,
