@@ -16,18 +16,18 @@ export const HackState = {
 const CYCLE_PRODUCTION_LOOKUP = {};
 
 function getCycleProductionLookup(ns, env) {
-    // if (
-    //     CYCLE_PRODUCTION_LOOKUP[env.targetname] &&
-    //     CYCLE_PRODUCTION_LOOKUP[env.targetname].hack === ns.getPlayer().hacking
-    // ) {
-    //     ns.tprintf("Hit %20s:%d", env.targetname, ns.getPlayer().hacking);
-    //     return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
-    // }
+    if (
+        CYCLE_PRODUCTION_LOOKUP[env.targetname] &&
+        CYCLE_PRODUCTION_LOOKUP[env.targetname].hack === ns.getPlayer().hacking
+    ) {
+        ns.tprintf("Hit %20s:%d", env.targetname, ns.getPlayer().hacking);
+        return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
+    }
 
     let startTime = new Date().getTime();
     // memoize cycle production statistics indexed by cycleThreadAllowance
     let cycleProductionLookup = new Array(env.maxThreads + 1).fill(null);
-
+    
     let hackThreads = Math.min(env.maxThreads, Math.floor(1 / env.hackPercentPerThread));
 
     let crashCount = 0;
@@ -98,15 +98,15 @@ function getCycleProductionLookup(ns, env) {
 
     let endTime = new Date().getTime();
 
-    ns.tprintf(
-        "Calculated %20s:%d in %4dms | %d values | %4d | %4d",
-        env.targetname,
-        ns.getPlayer().hacking,
-        endTime - startTime,
-        env.maxThreads,
-        Math.floor(1 / env.hackPercentPerThread),
-        crashCount
-    );
+    // ns.tprintf(
+    //     "Calculated %20s:%d in %4dms | %d values | %4d | %4d",
+    //     env.targetname,
+    //     ns.getPlayer().hacking,
+    //     endTime - startTime,
+    //     env.maxThreads,
+    //     Math.floor(1 / env.hackPercentPerThread),
+    //     crashCount
+    // );
 
     CYCLE_PRODUCTION_LOOKUP[env.targetname] = { hack: ns.getPlayer().hacking, prod: cycleProductionLookup };
     return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
@@ -296,10 +296,7 @@ export class SuperHackEnv {
 
         this.maxThreads = 0;
         this.hosts.map((x) => (this.maxThreads += x.maxThreads), this);
-
-        // if (debug) {
-        //     ns.print(ns.sprintf("Max Threads: %d", this.maxThreads));
-        // }
+        this.maxThreads = Math.min(1000000, this.maxThreads)
     }
 
     async init(ns, force = false) {
@@ -1233,6 +1230,7 @@ export class SuperHackEnv {
     fastSim(ns, time) {
         this.resetSim(ns);
         this.simEnabled = true;
+        
 
         this.updateForW(ns);
         while (!this.doneWeaken(ns)) {
@@ -1244,7 +1242,7 @@ export class SuperHackEnv {
 
             this.simTime += this.weakenTime + this.tspacer;
 
-            // ns.print(ns.sprintf(
+            // ns.tprintf(
             //     "WEAKEN: Fast Sim Time: %s (%s + %s)",
             //     ns.tFormat(this.simTime, true),
             //     ns.tFormat(this.weakenTime, true),
@@ -1266,7 +1264,7 @@ export class SuperHackEnv {
             this.simTime += this.weakenTime + this.tspacer;
             this.simTarget.hackDifficulty = this.simTarget.minDifficulty;
 
-            // ns.print(ns.sprintf(
+            // ns.tprintf(
             //     "GROW-WEAKEN: Fast Sim Time: %s (%s + %s)",
             //     ns.tFormat(this.simTime, true),
             //     ns.tFormat(this.weakenTime, true),
@@ -1292,7 +1290,7 @@ export class SuperHackEnv {
             this.simTime += hackCycles * hwTime;
             this.simIncome += hackCycles * hwTotal;
 
-            // ns.print(ns.sprintf(
+            // ns.tprintf(
             //     "HACK-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
             //     ns.tFormat(this.simTime, true),
             //     ns.nFormat(this.simIncome, "($0.000a)"),
@@ -1305,7 +1303,7 @@ export class SuperHackEnv {
             this.simTime += hackCycles * hgwTime;
             this.simIncome += hackCycles * hgwTotal;
 
-            // ns.print(ns.sprintf(
+            // ns.tprintf(
             //     "HACK-GROW-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
             //     ns.tFormat(this.simTime, true),
             //     ns.nFormat(this.simIncome, "($0.000a)"),

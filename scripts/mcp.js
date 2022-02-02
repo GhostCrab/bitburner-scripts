@@ -77,7 +77,7 @@ class Augmentation {
 
     isHackUseful() {
         if (this.name === "Neuroflux Governor") return false;
-        //return true;
+        return true;
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
         if (this.stats.hacking_chance_mult) return true;
@@ -257,23 +257,23 @@ export async function main(ns) {
         }
     }
 
-    // if (allPurchaseableAugs.length > 0) {
-    //     ns.tprintf("============================");
-    //     let mult = 1;
-    //     let total = 0;
-    //     for (let aug of allPurchaseableAugs.filter(a => a.name !== "The Red Pill")) {
-    //         if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
-    //         ns.tprintf(
-    //             "%40s - %9s %s",
-    //             aug.name,
-    //             ns.nFormat(aug.price * mult, "$0.000a"),
-    //             aug.dep !== undefined ? aug.dep : ""
-    //         );
-    //         total += aug.price * mult;
-    //         mult *= 1.9;
-    //     }
-    //     ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
-    // }
+    if (allPurchaseableAugs.length > 0) {
+        ns.tprintf("============================");
+        let mult = 1;
+        let total = 0;
+        for (let aug of allPurchaseableAugs) {
+            //if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
+            ns.tprintf(
+                "%40s - %9s %s",
+                aug.name,
+                ns.nFormat(aug.price * mult, "$0.000a"),
+                aug.dep !== undefined ? aug.dep : ""
+            );
+            total += aug.price * mult;
+            mult *= 1.9;
+        }
+        ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
+    }
 
     if (allPurchaseableAugs.length > 0) {
         ns.tprintf("============================");

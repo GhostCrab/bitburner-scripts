@@ -1,5 +1,5 @@
 export const debug = false;
-export const TSPACER = 100;
+export const TSPACER = 50;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
@@ -34,6 +34,106 @@ function stdFormat(ns, offset = 0, showms = true) {
     } else {
         return date.toLocaleTimeString("it-IT");
     }
+}
+
+// {targetname: {hack stat, production lookup table}}
+const CYCLE_PRODUCTION_LOOKUP = {};
+
+function getCycleProductionLookup(ns, env) {
+    if (
+        CYCLE_PRODUCTION_LOOKUP[env.targetname] &&
+        CYCLE_PRODUCTION_LOOKUP[env.targetname].hack === ns.getPlayer().hacking
+    ) {
+        ns.tprintf("Hit %20s:%d", env.targetname, ns.getPlayer().hacking);
+        return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
+    }
+
+    let startTime = new Date().getTime();
+    // memoize cycle production statistics indexed by cycleThreadAllowance
+    let cycleProductionLookup = new Array(env.maxThreads + 1).fill(null);
+
+    let hackThreads = Math.min(env.maxThreads, Math.floor(1 / env.hackPercentPerThread));
+
+    let crashCount = 0;
+    let assignCount = 0;
+    let hackAnalyzeSecurityCounter = 0;
+    let calcGrowThreadsCounter = 0;
+    let growthAnalyzeSecurity = 0;
+    while (hackThreads > 0) {
+        hackThreads--;
+        let hackTotal = env.hackPercentPerThread * hackThreads * env.highMoney;
+        let c1 = new Date().getTime();
+        let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
+        let c2 = new Date().getTime();
+        hackAnalyzeSecurityCounter += c2 - c1;
+
+        let growMult = Math.max(env.highMoney / (env.highMoney - hackTotal), 1);
+        let c3 = new Date().getTime();
+        let growThreads = env.calcGrowThreads(ns, growMult);
+        let c4 = new Date().getTime();
+        calcGrowThreadsCounter += c4 - c3;
+
+        if (hackThreads + growThreads > env.maxThreads) {
+            //ns.tprintf("h %d | g %d", hackThreads, growThreads)
+            continue;
+        }
+
+        let c5 = new Date().getTime();
+        let growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
+        let c6 = new Date().getTime();
+        growthAnalyzeSecurity += c6 - c5;
+
+        let weakenHackThreads = Math.ceil(hackSecIncrease / env.weakenAmountPerThread);
+        let weakenGrowThreads = Math.ceil(growSecIncrease / env.weakenAmountPerThread);
+
+        let totalThreads = hackThreads + weakenHackThreads + growThreads + weakenGrowThreads;
+
+        if (totalThreads > env.maxThreads) continue;
+
+        if (cycleProductionLookup[totalThreads] !== null) {
+            crashCount++;
+        } else {
+            assignCount++;
+            cycleProductionLookup[totalThreads] = {
+                totalThreads: totalThreads,
+                hackTotal: hackTotal,
+                hackThreads: hackThreads,
+                growThreads: growThreads,
+                weakenHackThreads: weakenHackThreads,
+                weakenGrowThreads: weakenGrowThreads,
+            };
+        }
+    }
+
+    // Fill in the blanks
+    const zeroThread = {
+        totalThreads: 0,
+        hackTotal: 0,
+        hackThreads: 0,
+        growThreads: 0,
+        weakenHackThreads: 0,
+        weakenGrowThreads: 0,
+    };
+    let fillDict = zeroThread;
+    for (let idx = 0; idx < cycleProductionLookup.length; idx++) {
+        if (cycleProductionLookup[idx] === null) cycleProductionLookup[idx] = fillDict;
+        else fillDict = cycleProductionLookup[idx];
+    }
+
+    let endTime = new Date().getTime();
+
+    // ns.tprintf(
+    //     "Calculated %20s:%d in %4dms | %d values | %4d | %4d",
+    //     env.targetname,
+    //     ns.getPlayer().hacking,
+    //     endTime - startTime,
+    //     env.maxThreads,
+    //     Math.floor(1 / env.hackPercentPerThread),
+    //     crashCount
+    // );
+
+    CYCLE_PRODUCTION_LOOKUP[env.targetname] = { hack: ns.getPlayer().hacking, prod: cycleProductionLookup };
+    return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
 }
 
 class Host {
@@ -85,6 +185,8 @@ class Host {
             let homeram = ns.getServerMaxRam(this.hostname) - 64;
             this.maxThreads = Math.max(0, Math.floor(homeram / this.threadSize));
         }
+
+        this.maxThreads = Math.min(1000000, this.maxThreads)
 
         return this.maxThreads;
     }
@@ -212,24 +314,33 @@ export class SmartHackEnv {
         return ns.hackAnalyze(this.targetname);
     }
 
+    numCycleForGrowth(ns, server, growth, player, cores = 1) {
+        let ajdGrowthRate = 1.03 / server.hackDifficulty;
+        if (ajdGrowthRate > 1.0035) {
+            ajdGrowthRate = 1.0035;
+        }
+
+        const serverGrowthPercentage = server.serverGrowth / 100;
+
+        const coreBonus = 1 + (cores - 1) / 16;
+        const cycles =
+            Math.log(growth) /
+            (Math.log(ajdGrowthRate) *
+                player.hacking_grow_mult *
+                serverGrowthPercentage *
+                ns.getBitNodeMultipliers().ServerGrowthRate *
+                coreBonus);
+
+        return cycles;
+    }
+
     /** @param {import(".").NS } ns */
     calcGrowThreads(ns, _growMult) {
-        let growMult = _growMult !== undefined ? _growMult : this.growMult;
-        if (growMult <= 1) return 0;
-        let growThreads = Math.ceil(ns.growthAnalyze(this.targetname, growMult, this.cores));
+        let growMult = _growMult === undefined ? this.growMult : _growMult;
+        if (growMult < 1) return 0;
+        if (this.simEnabled) return Math.ceil(this.numCycleForGrowth(ns, this.simTarget, growMult, this.simPlayer));
 
-        // growThreads in a simulation will probably overshoot because the actual security is too high.
-        // start with the bad estimate and reduce grow threads until the result from growPercent is less
-        // than growMult, then increase it back by 1
-        if (this.simEnabled) {
-            while (
-                ns.formulas.hacking.growPercent(this.simTarget, --growThreads, this.simPlayer, this.cores) > growMult
-            );
-
-            // correct overshoot
-            growThreads++;
-        }
-        return growThreads;
+        return Math.ceil(ns.growthAnalyze(this.targetname, growMult, this.cores));
     }
 
     /** @param {import(".").NS } ns */
@@ -286,52 +397,7 @@ export class SmartHackEnv {
         }
 
         // memoize cycle production statistics indexed by cycleThreadAllowance
-        let cycleProductionLookup = new Array(this.maxThreads + 1).fill(null);
-
-        let hackThreads = Math.floor(1 / this.hackPercentPerThread);
-
-        while (hackThreads > 0) {
-            hackThreads--;
-            let hackTotal = this.hackPercentPerThread * hackThreads * this.highMoney;
-            let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
-
-            let growMult = Math.max(this.highMoney / (this.highMoney - hackTotal), 1);
-            let growThreads = this.calcGrowThreads(ns, growMult);
-            let growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
-
-            let weakenHackThreads = Math.ceil(hackSecIncrease / this.weakenAmountPerThread);
-            let weakenGrowThreads = Math.ceil(growSecIncrease / this.weakenAmountPerThread);
-
-            let totalThreads = hackThreads + weakenHackThreads + growThreads + weakenGrowThreads;
-
-            if (cycleProductionLookup[totalThreads] !== null) {
-                //ns.tprintf("WARNING: CRASH at %d", totalThreads);
-            } else {
-                cycleProductionLookup[totalThreads] = {
-                    totalThreads: totalThreads,
-                    hackTotal: hackTotal,
-                    hackThreads: hackThreads,
-                    growThreads: growThreads,
-                    weakenHackThreads: weakenHackThreads,
-                    weakenGrowThreads: weakenGrowThreads,
-                };
-            }
-        }
-
-        // Fill in the blanks
-        const zeroThread = {
-            totalThreads: 0,
-            hackTotal: 0,
-            hackThreads: 0,
-            growThreads: 0,
-            weakenHackThreads: 0,
-            weakenGrowThreads: 0,
-        };
-        let fillDict = zeroThread;
-        for (let idx = 0; idx < cycleProductionLookup.length; idx++) {
-            if (cycleProductionLookup[idx] === null) cycleProductionLookup[idx] = fillDict;
-            else fillDict = cycleProductionLookup[idx];
-        }
+        let cycleProductionLookup = getCycleProductionLookup(ns, this);
 
         // Get all cycle combination production statistics
         let allCycles = [];
@@ -354,6 +420,7 @@ export class SmartHackEnv {
 
             allCycles.push({
                 cycleTotal: cycleTotal,
+                hackTotal: cycleStats.hackTotal,
                 production: (usableCycles * cycleStats.hackTotal) / (fullCycleTime / 1000),
                 fullCycleTime: fullCycleTime,
                 hackThreads: cycleStats.hackThreads,
@@ -369,6 +436,7 @@ export class SmartHackEnv {
         //this.debugPrintCycleStats(ns, primaryThreadsTotal, allCycles);
 
         let cycleTarget = allCycles[0];
+        this.hackTotal = cycleTarget.hackTotal;
         this.hackThreads = cycleTarget.hackThreads;
         this.growThreads = cycleTarget.growThreads;
         this.weakenHackThreads = cycleTarget.weakenHackThreads;
@@ -520,29 +588,31 @@ export class SmartHackEnv {
             });
         }
 
-        execs = execs.sort((a, b) => a.delay - b.delay);
+        execs = execs.sort((a, b) => b.delay - a.delay);
 
         this.waitPID = 0;
         let waitPIDFinishTime = 0;
-        let startTime = Date.now();
+        let startTime = new Date().getTime();
         while (execs.length > 0) {
             let exec = execs.pop();
 
-            while (Date.now() - startTime < exec.delay) await ns.sleep(5);
+            while (new Date().getTime() - startTime < exec.delay) await ns.sleep(5);
 
             // script call has come up, make sure it is starting and finishing within +- tspacer / 2
-            let curTOffset = Date.now() - startTime;
+            let curTOffset = new Date().getTime() - startTime;
             let delayDiff = Math.abs(curTOffset - exec.delay);
             if (delayDiff > this.tspacer / 2) {
                 execs = execs.filter((a) => a.batchId !== exec.batchId);
                 ns.print(
                     ns.sprintf(
-                        "WARNING: %s:%s #%d start time was off by %dms (limit is +- %d) and the batch was canceled",
+                        "WARNING: %s:%s #%d start time was off by %dms (limit is +- %d) and the batch was canceled s: %s c: %s",
                         exec.target,
                         exec.script,
                         exec.batchId,
                         curTOffset - exec.delay,
-                        this.tspacer / 2
+                        this.tspacer / 2,
+                        stFormat(ns, exec.delay, true),
+                        stFormat(ns, curTOffset, true)
                     )
                 );
                 continue;
@@ -558,12 +628,14 @@ export class SmartHackEnv {
                 execs = execs.filter((a) => a.batchId !== exec.batchId);
                 ns.print(
                     ns.sprintf(
-                        "WARNING: %s:%s #%d finish time was off by %dms (limit is +- %d) and the batch was canceled",
+                        "WARNING: %s:%s #%d finish time was off by %dms (limit is +- %d) and the batch was canceled  e: %s c: %s",
                         exec.target,
                         exec.script,
                         exec.batchId,
                         finishTOffset - exec.finish,
-                        this.tspacer / 2
+                        this.tspacer / 2,
+                        stFormat(ns, exec.finish, true),
+                        stFormat(ns, finishTOffset, true)
                     )
                 );
                 continue;

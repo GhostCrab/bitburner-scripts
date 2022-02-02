@@ -9,7 +9,7 @@ export async function main(ns) {
     }
 
 	for (let ps of ns.ps("home")) {
-		if (ps.filename === "ka.js" || ps.filename === "clock.js" || ps.filename === "leech.js" || ps.filename === "hacknet.js")
+		if (ps.filename === "ka.js" || ps.filename === "clock.js" || ps.filename === "leech.js" || ps.filename === "hacknet.js" || ps.filename === "hacking_gang.js")
 			continue
     	ns.kill(ps.pid)
 	}

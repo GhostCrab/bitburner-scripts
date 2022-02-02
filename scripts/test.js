@@ -1,7 +1,7 @@
 import { allHosts, serverIsHackable, setns, canExecuteOnServer, cleanLogs } from "./util.js";
 import { SuperHackEnv } from "./super_hack_env.js";
 
-async function calcIncome(ns, target, allHostnames, simMinutes = 2) {
+function calcIncome(ns, target, allHostnames, simMinutes = 2) {
     return new SuperHackEnv(ns, target, allHostnames.filter(canExecuteOnServer)).fastSim(ns, 1000 * 60 * simMinutes);
 }
 
