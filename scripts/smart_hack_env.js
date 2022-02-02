@@ -59,13 +59,19 @@ class Host {
     }
 
     // return # of threads successfully allocated
-    tryReserveThreads(ns, script, threads, offset) {
+    tryReserveThreads(ns, script, threads, offset, length, batchId) {
         let reservedThreadCount = this.getReservedThreadCount();
 
         if (reservedThreadCount === this.maxThreads) return 0;
 
         let newThreadCount = Math.min(this.maxThreads - reservedThreadCount, threads);
-        this.reservedScriptCalls.push({ script: script, threads: newThreadCount, offset: offset });
+        this.reservedScriptCalls.push({
+            script: script,
+            threads: newThreadCount,
+            offset: offset,
+            length: length,
+            batchId: batchId,
+        });
 
         return newThreadCount;
     }
@@ -81,7 +87,6 @@ class Host {
         }
 
         return this.maxThreads;
-        //return (this.maxThreads = 2859);
     }
 
     async prep(ns, force = false) {
@@ -107,6 +112,8 @@ export class SmartHackEnv {
         this.host = new Host(ns, hostname, this.threadSize);
         this.cores = ns.getServer(this.host.hostname).cores;
         this.maxThreads = this.host.maxThreads;
+
+        this.waitPID = 0;
 
         // Target Info
         this.security = 0;
@@ -278,26 +285,13 @@ export class SmartHackEnv {
             return false;
         }
 
-        let allCycles = [];
-        //let cycleStep = Math.max(Math.floor(this.cycleMax / 10), 1)
-        let cycleStep = 1;
-        for (let cycleTotal = 1; cycleTotal <= this.cycleMax; cycleTotal += cycleStep) {
-            if (cycleTotal === 1 && primaryThreadsTotal > 0) {
-                allCycles.push({
-                    cycleTotal: cycleTotal,
-                    production: 1,
-                });
-                continue;
-            }
+        // memoize cycle production statistics indexed by cycleThreadAllowance
+        let cycleProductionLookup = new Array(this.maxThreads + 1).fill(null);
 
-            let usableThreads = this.maxThreads - primaryThreadsTotal;
-            let usableCycles = primaryThreadsTotal > 0 ? cycleTotal - 1 : cycleTotal;
+        let hackThreads = Math.floor(1 / this.hackPercentPerThread);
 
-            let cycleThreadAllowance = Math.floor(usableThreads / usableCycles);
-
-            let hackThreads = Math.floor(1 / this.hackPercentPerThread - 1);
-            //let hackThreadStep = Math.max(Math.floor(hackThreads / 25), 1);
-            let hackThreadStep = 1;
+        while (hackThreads > 0) {
+            hackThreads--;
             let hackTotal = this.hackPercentPerThread * hackThreads * this.highMoney;
             let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
 
@@ -310,51 +304,150 @@ export class SmartHackEnv {
 
             let totalThreads = hackThreads + weakenHackThreads + growThreads + weakenGrowThreads;
 
-            while (totalThreads > cycleThreadAllowance) {
-                hackThreads -= hackThreadStep;
-
-                if (hackThreads <= 0) break;
-
-                hackTotal = this.hackPercentPerThread * hackThreads * this.highMoney;
-                hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
-
-                growMult = Math.max(this.highMoney / (this.highMoney - hackTotal), 1);
-                growThreads = this.calcGrowThreads(ns, growMult);
-                growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
-
-                weakenHackThreads = Math.ceil(hackSecIncrease / this.weakenAmountPerThread);
-                weakenGrowThreads = Math.ceil(growSecIncrease / this.weakenAmountPerThread);
-
-                totalThreads = hackThreads + weakenHackThreads + growThreads + weakenGrowThreads;
+            if (cycleProductionLookup[totalThreads] !== null) {
+                //ns.tprintf("WARNING: CRASH at %d", totalThreads);
+            } else {
+                cycleProductionLookup[totalThreads] = {
+                    totalThreads: totalThreads,
+                    hackTotal: hackTotal,
+                    hackThreads: hackThreads,
+                    growThreads: growThreads,
+                    weakenHackThreads: weakenHackThreads,
+                    weakenGrowThreads: weakenGrowThreads,
+                };
             }
+        }
 
-            if (hackThreads <= 0) {
+        // Fill in the blanks
+        const zeroThread = {
+            totalThreads: 0,
+            hackTotal: 0,
+            hackThreads: 0,
+            growThreads: 0,
+            weakenHackThreads: 0,
+            weakenGrowThreads: 0,
+        };
+        let fillDict = zeroThread;
+        for (let idx = 0; idx < cycleProductionLookup.length; idx++) {
+            if (cycleProductionLookup[idx] === null) cycleProductionLookup[idx] = fillDict;
+            else fillDict = cycleProductionLookup[idx];
+        }
+
+        // Get all cycle combination production statistics
+        let allCycles = [];
+        for (let cycleTotal = 1; cycleTotal <= this.cycleMax; cycleTotal++) {
+            if (cycleTotal === 1 && primaryThreadsTotal > 0) {
                 allCycles.push({
                     cycleTotal: cycleTotal,
-                    production: 0,
+                    production: 1,
                 });
-
                 continue;
             }
 
+            let usableThreads = this.maxThreads - primaryThreadsTotal;
+            let usableCycles = primaryThreadsTotal > 0 ? cycleTotal - 1 : cycleTotal;
             let fullCycleTime = this.cycleFullTime + this.cycleSpacer * (cycleTotal - 1);
+
+            let cycleThreadAllowance = Math.floor(usableThreads / usableCycles);
+
+            let cycleStats = cycleProductionLookup[cycleThreadAllowance];
 
             allCycles.push({
                 cycleTotal: cycleTotal,
-                production: (usableCycles * hackTotal) / (fullCycleTime / 1000),
+                production: (usableCycles * cycleStats.hackTotal) / (fullCycleTime / 1000),
                 fullCycleTime: fullCycleTime,
-                hackThreads: hackThreads,
-                growThreads: growThreads,
-                weakenHackThreads: weakenHackThreads,
-                weakenGrowThreads: weakenGrowThreads,
-                percentPerCycle: (hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
+                hackThreads: cycleStats.hackThreads,
+                growThreads: cycleStats.growThreads,
+                weakenHackThreads: cycleStats.weakenHackThreads,
+                weakenGrowThreads: cycleStats.weakenGrowThreads,
+                percentPerCycle: (cycleStats.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
             });
         }
 
         allCycles = allCycles.sort((a, b) => b.production - a.production);
 
+        //this.debugPrintCycleStats(ns, primaryThreadsTotal, allCycles);
+
+        let cycleTarget = allCycles[0];
+        this.hackThreads = cycleTarget.hackThreads;
+        this.growThreads = cycleTarget.growThreads;
+        this.weakenHackThreads = cycleTarget.weakenHackThreads;
+        this.weakenGrowThreads = cycleTarget.weakenGrowThreads;
+        this.cycleTotal = cycleTarget.cycleTotal;
+        this.cycleBatchTime = cycleTarget.fullCycleTime;
+
+        let weakenGrowOffsetTime = this.tspacer * 2;
+        let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
+        let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
+
+        let primaryStats = {
+            primaryThreadsTotal: primaryThreadsTotal,
+            primaryGrowThreads: primaryGrowThreads,
+            primaryWeakenThreads: primaryWeakenThreads,
+        };
+
+        if (primaryThreadsTotal > 0) {
+            if (primaryGrowThreads > 0)
+                this.host.tryReserveThreads(ns, GROWNS, primaryGrowThreads, growOffsetTime, this.growTime, 0);
+            if (primaryWeakenThreads > 0)
+                this.host.tryReserveThreads(
+                    ns,
+                    WEAKENNS,
+                    primaryWeakenThreads,
+                    weakenGrowOffsetTime,
+                    this.weakenTime,
+                    0
+                );
+        }
+
+        for (let i = 0; i < this.cycleTotal; i++) {
+            if (primaryThreadsTotal > 0 && i === 0) continue;
+            let cycleOffsetTime = i * this.cycleSpacer;
+            this.host.tryReserveThreads(
+                ns,
+                HACKNS,
+                this.hackThreads,
+                cycleOffsetTime + hackOffsetTime,
+                this.hackTime,
+                i
+            );
+            this.host.tryReserveThreads(
+                ns,
+                GROWNS,
+                this.growThreads,
+                cycleOffsetTime + growOffsetTime,
+                this.growTime,
+                i
+            );
+            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenHackThreads, cycleOffsetTime, this.weakenTime, i);
+            this.host.tryReserveThreads(
+                ns,
+                WEAKENNS,
+                this.weakenGrowThreads,
+                cycleOffsetTime + weakenGrowOffsetTime,
+                this.weakenTime,
+                i
+            );
+        }
+
+        let port = ns.getPortHandle(1);
+        port.clear();
+        port.write([
+            new Date(),
+            this.cycleBatchTime,
+            this.targetname,
+            ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
+            "SMART",
+        ]);
+
+        this.logStats(ns, primaryStats);
+
+        await this.execute(ns);
+        this.resetThreads();
+    }
+
+    debugPrintCycleStats(ns, primaryThreadsTotal, allCycles) {
         for (const cycle of allCycles) {
-            break;
             let batchThreads =
                 cycle.hackThreads + cycle.growThreads + cycle.weakenHackThreads + cycle.weakenGrowThreads;
             if (cycle.hackThreads === undefined) batchThreads = 0;
@@ -374,55 +467,21 @@ export class SmartHackEnv {
                 cycleMem
             );
         }
+    }
 
-        let cycleTarget = allCycles[0];
-        this.hackThreads = cycleTarget.hackThreads;
-        this.growThreads = cycleTarget.growThreads;
-        this.weakenHackThreads = cycleTarget.weakenHackThreads;
-        this.weakenGrowThreads = cycleTarget.weakenGrowThreads;
-        this.cycleTotal = cycleTarget.cycleTotal;
-        this.cycleBatchTime = cycleTarget.fullCycleTime;
-
-        let weakenGrowOffsetTime = this.tspacer * 2;
-        let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
-        let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
-
-        if (primaryThreadsTotal > 0) {
-            if (primaryGrowThreads > 0)
-                this.host.tryReserveThreads(ns, GROWNS, primaryGrowThreads, growOffsetTime);
-            if (primaryWeakenThreads > 0)
-                this.host.tryReserveThreads(ns, WEAKENNS, primaryWeakenThreads, weakenGrowOffsetTime);
-
+    logStats(ns, primaryStats) {
+        if (primaryStats.primaryThreadsTotal > 0) {
             ns.print(
                 ns.sprintf(
                     "%8s SMART-PRIMARY: %s => Grow %d; Weaken %d; Total Threads %d",
                     new Date().toLocaleTimeString("it-IT"),
                     this.targetname,
-                    primaryGrowThreads,
-                    primaryWeakenThreads,
-                    primaryThreadsTotal
+                    primaryStats.primaryGrowThreads,
+                    primaryStats.primaryWeakenThreads,
+                    primaryStats.primaryThreadsTotal
                 )
             );
         }
-
-        for (let i = 0; i < this.cycleTotal; i++) {
-            if (primaryThreadsTotal > 0 && i === 0) continue;
-            let cycleOffsetTime = i * this.cycleSpacer;
-            this.host.tryReserveThreads(ns, HACKNS, this.hackThreads, cycleOffsetTime + hackOffsetTime);
-            this.host.tryReserveThreads(ns, GROWNS, this.growThreads, cycleOffsetTime + growOffsetTime);
-            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenHackThreads, cycleOffsetTime);
-            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenGrowThreads, cycleOffsetTime + weakenGrowOffsetTime);
-        }
-
-        let port = ns.getPortHandle(1);
-        port.clear();
-        port.write([
-            new Date(),
-            this.cycleBatchTime,
-            this.targetname,
-            ns.getScriptIncome(ns.getScriptName(), ns.getHostname(), ...ns.args),
-            "SMART",
-        ]);
 
         ns.print(
             ns.sprintf(
@@ -443,11 +502,9 @@ export class SmartHackEnv {
                 stdFormat(ns, this.cycleBatchTime)
             )
         );
-
-        await this.execute(ns);
-        this.resetThreads();
     }
 
+    /** @param {import(".").NS } ns */
     async execute(ns) {
         let execs = [];
         for (const scriptCall of this.host.reservedScriptCalls) {
@@ -458,16 +515,65 @@ export class SmartHackEnv {
                 target: this.targetname,
                 delay: scriptCall.offset,
                 pos: execs.length,
+                finish: scriptCall.offset + scriptCall.length,
+                batchId: scriptCall.batchId,
             });
         }
 
         execs = execs.sort((a, b) => a.delay - b.delay);
 
+        this.waitPID = 0;
+        let waitPIDFinishTime = 0;
         let startTime = Date.now();
-        for (let exec of execs) {
-            while (Date.now() - startTime < exec.delay) await ns.sleep(20);
+        while (execs.length > 0) {
+            let exec = execs.pop();
 
-            ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
+            while (Date.now() - startTime < exec.delay) await ns.sleep(5);
+
+            // script call has come up, make sure it is starting and finishing within +- tspacer / 2
+            let curTOffset = Date.now() - startTime;
+            let delayDiff = Math.abs(curTOffset - exec.delay);
+            if (delayDiff > this.tspacer / 2) {
+                execs = execs.filter((a) => a.batchId !== exec.batchId);
+                ns.print(
+                    ns.sprintf(
+                        "WARNING: %s:%s #%d start time was off by %dms (limit is +- %d) and the batch was canceled",
+                        exec.target,
+                        exec.script,
+                        exec.batchId,
+                        curTOffset - exec.delay,
+                        this.tspacer / 2
+                    )
+                );
+                continue;
+            }
+
+            let finishTOffset = curTOffset;
+            if (exec.script === WEAKENNS) finishTOffset += ns.getWeakenTime(exec.target);
+            if (exec.script === GROWNS) finishTOffset += ns.getGrowTime(exec.target);
+            if (exec.script === HACKNS) finishTOffset += ns.getHackTime(exec.target);
+
+            let finishDiff = Math.abs(finishTOffset - exec.finish);
+            if (finishDiff > this.tspacer / 2) {
+                execs = execs.filter((a) => a.batchId !== exec.batchId);
+                ns.print(
+                    ns.sprintf(
+                        "WARNING: %s:%s #%d finish time was off by %dms (limit is +- %d) and the batch was canceled",
+                        exec.target,
+                        exec.script,
+                        exec.batchId,
+                        finishTOffset - exec.finish,
+                        this.tspacer / 2
+                    )
+                );
+                continue;
+            }
+
+            let pid = ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
+            if (waitPIDFinishTime < exec.finish) {
+                this.waitPID = pid;
+                waitPIDFinishTime = exec.finish;
+            }
         }
     }
 
@@ -478,103 +584,13 @@ export class SmartHackEnv {
     /** @param {import(".").NS } ns */
     isWRunning(ns) {
         if (this.simEnabled) return false;
+        if (this.waitPID === 0) return false;
 
-        let ps = ns.ps(this.host.hostname);
-        for (let psInfo of ps) {
-            if (psInfo.filename === WEAKENNS && psInfo.args.includes(this.targetname)) {
-                return true;
-            }
+        if (ns.getRunningScript(this.waitPID)) {
+            return true;
         }
 
+        this.waitPID = 0;
         return false;
-    }
-
-    /** @param {import(".").NS } ns */
-    fastSim(ns, time) {
-        this.resetSim(ns);
-        this.simEnabled = true;
-
-        this.updateForW(ns);
-        while (!this.doneWeaken(ns)) {
-            this.simTarget.hackDifficulty -= this.weakenThreads * this.weakenAmountPerThread;
-            this.simTarget.hackDifficulty = Math.max(
-                this.simTarget.hackDifficulty,
-                ns.getServerMinSecurityLevel(this.targetname)
-            );
-
-            this.simTime += this.weakenTime + this.tspacer;
-
-            // ns.print(ns.sprintf(
-            //     "WEAKEN: Fast Sim Time: %s (%s + %s)",
-            //     ns.tFormat(this.simTime, true),
-            //     ns.tFormat(this.weakenTime, true),
-            //     ns.tFormat(this.tspacer, true)
-            // );
-
-            if (this.simTime > time) return this.simIncome;
-        }
-
-        this.updateForGW(ns);
-        let simGrowMult = ns.formulas.hacking.growPercent(this.simTarget, this.growThreads, this.simPlayer, this.cores);
-        while (!this.doneGrow(ns)) {
-            this.simTarget.moneyAvailable *= simGrowMult;
-            this.simTarget.moneyAvailable = Math.min(
-                this.simTarget.moneyAvailable,
-                ns.getServerMaxMoney(this.targetname)
-            );
-
-            this.simTime += this.weakenTime + this.tspacer;
-            this.simTarget.hackDifficulty = this.simTarget.minDifficulty;
-
-            // ns.print(ns.sprintf(
-            //     "GROW-WEAKEN: Fast Sim Time: %s (%s + %s)",
-            //     ns.tFormat(this.simTime, true),
-            //     ns.tFormat(this.weakenTime, true),
-            //     ns.tFormat(this.tspacer, true)
-            // );
-
-            if (this.simTime > time) return this.simIncome;
-        }
-
-        this.updateForHW(ns);
-        let hwTotal = this.hackTotal;
-        let hwTime = this.weakenTime * 2 + this.tspacer * 2;
-        let hwIncome = hwTotal / hwTime;
-        this.updateForHGW(ns);
-        let hgwTotal = this.hackTotal * this.cycleTotal;
-        let hgwTime = this.cycleBatchTime + this.tspacer;
-        let hgwIncome = hgwTotal / hgwTime;
-
-        let timeRemaining = time - this.simTime;
-        let hackCycles = 0;
-        if (hwIncome > hgwIncome) {
-            hackCycles = Math.floor(timeRemaining / hwTime);
-            this.simTime += hackCycles * hwTime;
-            this.simIncome += hackCycles * hwTotal;
-
-            // ns.print(ns.sprintf(
-            //     "HACK-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
-            //     ns.tFormat(this.simTime, true),
-            //     ns.nFormat(this.simIncome, "($0.000a)"),
-            //     ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)"),
-            //     hackCycles,
-            //     ns.tFormat(hwTime, true)
-            // );
-        } else {
-            hackCycles = Math.ceil(timeRemaining / hgwTime);
-            this.simTime += hackCycles * hgwTime;
-            this.simIncome += hackCycles * hgwTotal;
-
-            // ns.print(ns.sprintf(
-            //     "HACK-GROW-WEAKEN: Fast Sim Time: %s; Fast Sim Income: %s (%s/s); Fast Sim Hack Cycles: %d; Cycle Time: %s",
-            //     ns.tFormat(this.simTime, true),
-            //     ns.nFormat(this.simIncome, "($0.000a)"),
-            //     ns.nFormat(this.simIncome / (this.simTime / 1000), "($0.000a)"),
-            //     hackCycles,
-            //     ns.tFormat(hgwTime, true)
-            // );
-        }
-
-        return this.simIncome / (this.simTime / 1000);
     }
 }

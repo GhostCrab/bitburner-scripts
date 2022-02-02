@@ -12,6 +12,106 @@ export const HackState = {
     HGW: "HGW",
 };
 
+// {targetname: {hack stat, production lookup table}}
+const CYCLE_PRODUCTION_LOOKUP = {};
+
+function getCycleProductionLookup(ns, env) {
+    // if (
+    //     CYCLE_PRODUCTION_LOOKUP[env.targetname] &&
+    //     CYCLE_PRODUCTION_LOOKUP[env.targetname].hack === ns.getPlayer().hacking
+    // ) {
+    //     ns.tprintf("Hit %20s:%d", env.targetname, ns.getPlayer().hacking);
+    //     return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
+    // }
+
+    let startTime = new Date().getTime();
+    // memoize cycle production statistics indexed by cycleThreadAllowance
+    let cycleProductionLookup = new Array(env.maxThreads + 1).fill(null);
+
+    let hackThreads = Math.min(env.maxThreads, Math.floor(1 / env.hackPercentPerThread));
+
+    let crashCount = 0;
+    let assignCount = 0;
+    let hackAnalyzeSecurityCounter = 0;
+    let calcGrowThreadsCounter = 0;
+    let growthAnalyzeSecurity = 0;
+    while (hackThreads > 0) {
+        hackThreads--;
+        let hackTotal = env.hackPercentPerThread * hackThreads * env.highMoney;
+        let c1 = new Date().getTime();
+        let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
+        let c2 = new Date().getTime();
+        hackAnalyzeSecurityCounter += c2 - c1;
+
+        let growMult = Math.max(env.highMoney / (env.highMoney - hackTotal), 1);
+        let c3 = new Date().getTime();
+        let growThreads = env.calcGrowThreads(ns, growMult);
+        let c4 = new Date().getTime();
+        calcGrowThreadsCounter += c4 - c3;
+
+        if (hackThreads + growThreads > env.maxThreads) {
+            //ns.tprintf("h %d | g %d", hackThreads, growThreads)
+            continue;
+        }
+
+        let c5 = new Date().getTime();
+        let growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
+        let c6 = new Date().getTime();
+        growthAnalyzeSecurity += c6 - c5;
+
+        let weakenHackThreads = Math.ceil(hackSecIncrease / env.weakenAmountPerThread);
+        let weakenGrowThreads = Math.ceil(growSecIncrease / env.weakenAmountPerThread);
+
+        let totalThreads = hackThreads + weakenHackThreads + growThreads + weakenGrowThreads;
+
+        if (totalThreads > env.maxThreads) continue;
+
+        if (cycleProductionLookup[totalThreads] !== null) {
+            crashCount++;
+        } else {
+            assignCount++;
+            cycleProductionLookup[totalThreads] = {
+                totalThreads: totalThreads,
+                hackTotal: hackTotal,
+                hackThreads: hackThreads,
+                growThreads: growThreads,
+                weakenHackThreads: weakenHackThreads,
+                weakenGrowThreads: weakenGrowThreads,
+            };
+        }
+    }
+
+    // Fill in the blanks
+    const zeroThread = {
+        totalThreads: 0,
+        hackTotal: 0,
+        hackThreads: 0,
+        growThreads: 0,
+        weakenHackThreads: 0,
+        weakenGrowThreads: 0,
+    };
+    let fillDict = zeroThread;
+    for (let idx = 0; idx < cycleProductionLookup.length; idx++) {
+        if (cycleProductionLookup[idx] === null) cycleProductionLookup[idx] = fillDict;
+        else fillDict = cycleProductionLookup[idx];
+    }
+
+    let endTime = new Date().getTime();
+
+    ns.tprintf(
+        "Calculated %20s:%d in %4dms | %d values | %4d | %4d",
+        env.targetname,
+        ns.getPlayer().hacking,
+        endTime - startTime,
+        env.maxThreads,
+        Math.floor(1 / env.hackPercentPerThread),
+        crashCount
+    );
+
+    CYCLE_PRODUCTION_LOOKUP[env.targetname] = { hack: ns.getPlayer().hacking, prod: cycleProductionLookup };
+    return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
+}
+
 function stFormat(ns, ms, showms = true, showfull = false) {
     let timeLeft = ms;
     let hours = Math.floor(ms / (1000 * 60 * 60));
@@ -115,9 +215,6 @@ class Host {
 export class SuperHackEnv {
     /** @param {import(".").NS } ns */
     constructor(ns, targetname, hostnames) {
-        this.targetname = targetname;
-        this.highMoney = ns.getServerMaxMoney(this.targetname);
-        this.lowMoney = ns.getServerMaxMoney(this.targetname) * 0.5;
         this.tspacer = TSPACER; // CONST
 
         this.cores = 1; // Simplify
@@ -130,9 +227,12 @@ export class SuperHackEnv {
         this.updateHosts(ns, hostnames);
 
         // Target Info
+        this.targetname = targetname;
+        this.highMoney = ns.getServerMaxMoney(this.targetname);
+        this.lowMoney = ns.getServerMaxMoney(this.targetname) * 0.5;
+        this.targetMoneyAvailable = 0;
         this.targetSec = 0;
         this.targetSecMin = 0;
-        this.targetMoneyAvailable = 0;
 
         // Weaken Info
         this.weakenStartSec = 0;
@@ -289,24 +389,33 @@ export class SuperHackEnv {
         return ns.hackAnalyze(this.targetname);
     }
 
-    /** @param {import(".").NS } ns */
-    calcGrowThreads(ns) {
-        if (this.growMult < 1) return 0;
-        let growThreads = Math.ceil(ns.growthAnalyze(this.targetname, this.growMult, this.cores));
-
-        // growThreads in a simulation will probably overshoot because the actual security is too high.
-        // start with the bad estimate and reduce grow threads until the result from growPercent is less
-        // than growMult, then increase it back by 1
-        if (this.simEnabled) {
-            while (
-                ns.formulas.hacking.growPercent(this.simTarget, --growThreads, this.simPlayer, this.cores) >
-                this.growMult
-            );
-
-            // correct overshoot
-            growThreads++;
+    numCycleForGrowth(ns, server, growth, player, cores = 1) {
+        let ajdGrowthRate = 1.03 / server.hackDifficulty;
+        if (ajdGrowthRate > 1.0035) {
+            ajdGrowthRate = 1.0035;
         }
-        return growThreads;
+
+        const serverGrowthPercentage = server.serverGrowth / 100;
+
+        const coreBonus = 1 + (cores - 1) / 16;
+        const cycles =
+            Math.log(growth) /
+            (Math.log(ajdGrowthRate) *
+                player.hacking_grow_mult *
+                serverGrowthPercentage *
+                ns.getBitNodeMultipliers().ServerGrowthRate *
+                coreBonus);
+
+        return cycles;
+    }
+
+    /** @param {import(".").NS } ns */
+    calcGrowThreads(ns, _growMult) {
+        let growMult = _growMult === undefined ? this.growMult : _growMult;
+        if (growMult < 1) return 0;
+        if (this.simEnabled) return Math.ceil(this.numCycleForGrowth(ns, this.simTarget, growMult, this.simPlayer));
+
+        return Math.ceil(ns.growthAnalyze(this.targetname, growMult, this.cores));
     }
 
     /** @param {import(".").NS } ns */
@@ -554,189 +663,69 @@ export class SuperHackEnv {
     /** @param {import(".").NS } ns */
     updateForHGW(ns) {
         // Target Info
-        this.targetMoneyAvailable = this.getServerMoneyAvailable(ns);
-        this.targetSec = this.getServerSecurityLevel(ns);
-        this.targetSecMin = ns.getServerMinSecurityLevel(this.targetname);
-        let secDiff = this.targetSec - this.targetSecMin;
+        this.highMoney = ns.getServerMaxMoney(this.targetname);
+        this.lowMoney = ns.getServerMaxMoney(this.targetname) * 0.5;
+        this.money = this.getServerMoneyAvailable(ns);
+        this.lowSecurity = ns.getServerMinSecurityLevel(this.targetname);
+        this.security = this.getServerSecurityLevel(ns);
 
         // Hack Info
         this.hackTime = this.getHackTime(ns);
         this.hackPercentPerThread = this.hackAnalyze(ns);
-        this.hackTotalEst = this.targetMoneyAvailable - this.lowMoney;
-        let hackThreadsFull = Math.ceil(ns.hackAnalyzeThreads(this.targetname, this.hackTotalEst));
-        this.hackThreads = this.maxThreads;
-        this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
-        if (this.hackTotal >= this.targetMoneyAvailable) {
-            this.hackThreads = 1 / this.hackPercentPerThread - 1;
-            this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
-        }
+        this.hackThreads = 1 / this.hackPercentPerThread - 1;
+        this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.money;
         this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
 
         // Grow Info
         this.growTime = this.getGrowTime(ns);
-        this.growMult = this.highMoney / (this.targetMoneyAvailable - this.hackTotal);
-        this.growThreads = this.calcGrowThreads(ns);
-        this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
 
         // Weaken Info
         this.weakenTime = this.getWeakenTime(ns);
         this.weakenAmountPerThread = ns.weakenAnalyze(1, this.cores);
-        this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
-        this.weakenThreadsGrow = Math.ceil(this.growSecIncrease / this.weakenAmountPerThread);
 
         // Cycle Info
         this.cycleFullTime = this.weakenTime + this.tspacer * 2;
-        this.cycleFitTime = this.weakenTime - this.tspacer * 2; // Start hack start script on last cycle before this time
-        let hackStartTime = this.weakenTime - this.hackTime - this.tspacer;
         this.cycleMax = Math.floor((this.hackTime - this.tspacer) / this.cycleSpacer);
 
-        this.threadsPerCycle = this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
+        this.threadsPerCycle = this.hackThreads + this.weakenHackThreads + this.growThreads + this.weakenGrowThreads;
 
-        let setCycle = function (cycleTotal) {
-            if (cycleTotal <= 0) return [0, 0, 0, Number.MAX_VALUE, 0, 0, 0, 0, 0];
-            this.cycleTotal = cycleTotal;
-            let cycleThreadAllowance = Math.floor((this.maxThreads / this.cycleTotal) * 100) / 100;
+        let cycleProductionLookup = getCycleProductionLookup(ns, this);
 
-            this.hackThreads = cycleThreadAllowance;
-            this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
-            if (this.hackTotal >= this.targetMoneyAvailable) {
-                this.hackThreads = 1 / this.hackPercentPerThread - 1;
-                this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
-            }
-            this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
+        // Get all cycle combination production statistics
+        let allCycles = [];
+        for (let cycleTotal = 1; cycleTotal <= this.cycleMax; cycleTotal++) {
+            let usableThreads = this.maxThreads;
+            let fullCycleTime = this.cycleFullTime + this.cycleSpacer * (cycleTotal - 1);
 
-            this.growMult = this.highMoney / (this.targetMoneyAvailable - this.hackTotal);
-            this.growThreads = this.calcGrowThreads(ns);
-            this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
+            let cycleThreadAllowance = Math.floor(usableThreads / cycleTotal);
 
-            this.weakenThreadsHack = Math.ceil(this.hackSecIncrease / this.weakenAmountPerThread);
-            this.weakenThreadsGrow = Math.ceil(this.growSecIncrease / this.weakenAmountPerThread);
+            let cycleStats = cycleProductionLookup[cycleThreadAllowance];
 
-            this.threadsPerCycle =
-                this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
-
-            // attempt to estimate the optimal number of hack threads by reducing the hack thread count
-            // by the current ratio of hack threads to grow + weaken threads. Overestimate a little bit
-            // and let the reducer take care of the extra.
-            // if (this.threadsPerCycle > cycleThreadAllowance) {
-            //     this.hackThreads = cycleThreadAllowance * (this.hackThreads / this.threadsPerCycle);
-            // }
-
-            while (this.threadsPerCycle > cycleThreadAllowance) {
-                this.hackThreads--;
-
-                if (this.hackThreads <= 0) return [0, 0, 0, Number.MAX_VALUE];
-
-                this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.targetMoneyAvailable;
-                this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
-                this.weakenThreadsHack = Math.ceil((this.hackSecIncrease + secDiff) / this.weakenAmountPerThread);
-                this.growMult = this.highMoney / (this.targetMoneyAvailable - this.hackTotal);
-                this.growThreads = this.calcGrowThreads(ns);
-                this.growSecIncrease = ns.growthAnalyzeSecurity(this.growThreads);
-                this.weakenThreadsGrow = Math.ceil(this.growSecIncrease / this.weakenAmountPerThread);
-
-                this.threadsPerCycle =
-                    this.hackThreads + this.weakenThreadsHack + this.growThreads + this.weakenThreadsGrow;
-            }
-
-            this.cycleBatchTime = this.cycleFullTime + this.cycleSpacer * this.cycleTotal;
-            if (this.cycleTotal === 1) this.cycleBatchTime = this.cycleFullTime;
-
-            return [
-                (this.hackTotal * this.cycleTotal) / this.cycleBatchTime,
-                this.hackTotal,
-                this.cycleTotal,
-                this.cycleBatchTime,
-                this.threadsPerCycle,
-                cycleThreadAllowance,
-                this.hackThreads,
-                cycleThreadAllowance * (this.hackThreads / this.threadsPerCycle),
-            ];
-        }.bind(this);
-
-        let cycleIncomes = new Array(this.cycleMax + 1);
-        let cycleTarget = 0;
-
-        if (true) {
-            // find first cycle counting down from the top where income > 0, since the algorithm doesnt like
-            // flat lines and any cylcle count that results in a ram allocation less than a threshold automatically
-            // returns 0
-            let cycleMax;
-            for (cycleMax = this.cycleMax; cycleMax >= 0; cycleMax--) {
-                cycleIncomes[cycleMax] = setCycle(cycleMax);
-
-                if (cycleIncomes[cycleMax][0] > 0) break;
-            }
-            cycleMax++;
-
-            // find local maximum of cycleIncomes
-            // target center value,
-            //  if value to left of target is larger than target, recenter target to left of current target
-            //  if value to right of target is larger than target, recenter target to right of current target
-            //  if values to left and right of target are both less than target, keep target
-            let cycleMin = 0;
-            while (true) {
-                cycleTarget = cycleMin + Math.floor((cycleMax - cycleMin) / 2);
-
-                if (cycleTarget === this.cycleMax || cycleTarget === 1) break;
-
-                if (cycleIncomes[cycleTarget - 1] === undefined) {
-                    cycleIncomes[cycleTarget - 1] = setCycle(cycleTarget - 1);
-                }
-                if (cycleIncomes[cycleTarget] === undefined) {
-                    cycleIncomes[cycleTarget] = setCycle(cycleTarget);
-                }
-                if (cycleIncomes[cycleTarget + 1] === undefined) {
-                    cycleIncomes[cycleTarget + 1] = setCycle(cycleTarget + 1);
-                }
-
-                if (cycleIncomes[cycleTarget][0] < cycleIncomes[cycleTarget + 1][0]) {
-                    cycleMin = cycleTarget;
-                    continue;
-                }
-
-                if (cycleIncomes[cycleTarget][0] < cycleIncomes[cycleTarget - 1][0]) {
-                    cycleMax = cycleTarget;
-                    continue;
-                }
-
-                break;
-            }
-        } else {
-            for (let cycle = 0; cycle < cycleIncomes.length; cycle++) {
-                cycleIncomes[cycle] = setCycle(cycle);
-            }
-
-            cycleTarget = cycleIncomes.sort((a, b) => b[0] - a[0])[0][2];
+            allCycles.push({
+                cycleTotal: cycleTotal,
+                hackTotal: cycleStats.hackTotal,
+                production: (cycleTotal * cycleStats.hackTotal) / (fullCycleTime / 1000),
+                fullCycleTime: fullCycleTime,
+                hackThreads: cycleStats.hackThreads,
+                growThreads: cycleStats.growThreads,
+                weakenHackThreads: cycleStats.weakenHackThreads,
+                weakenGrowThreads: cycleStats.weakenGrowThreads,
+                percentPerCycle: (cycleStats.hackTotal / ns.getServerMaxMoney(this.targetname)) * 100,
+            });
         }
 
-        setCycle(cycleTarget);
+        allCycles = allCycles.sort((a, b) => b.production - a.production);
 
-        // for (let cycle = 0; cycle < cycleIncomes.length; cycle++) {
-        //     if (cycleIncomes[cycle] !== undefined && cycleIncomes[cycle][0] > 0) {
-        //         let hackPercent = (cycleIncomes[cycle][1] / this.highMoney) * 100;
-        //         let totalHackPercent = hackPercent * cycle;
-        //         ns.tprintf(
-        //             "%s => Cycle: %d --- Income: %s/s, Total: %s | %.2f%% | %.2f%%, Threads: %d | %d | %d (%d/%d), Hack Threads %d | est %s %s",
-        //             this.targetname,
-        //             cycle,
-        //             ns.nFormat(cycleIncomes[cycle][0], "($0.000a)"),
-        //             ns.nFormat(cycleIncomes[cycle][1], "($0.000a)"),
-        //             hackPercent,
-        //             totalHackPercent,
-        //             cycleIncomes[cycle][4],
-        //             cycleIncomes[cycle][4] * cycle,
-        //             this.maxThreads,
-        //             cycleIncomes[cycle][5],
-        //             cycleIncomes[cycle][5] * cycle,
-        //             cycleIncomes[cycle][6],
-        //             cycleIncomes[cycle][7],
-        //             (cycle === cycleTarget)?"WINNER":""
-        //         );
-        //     } else ns.tprintf(`${this.targetname} => Cycle: ${cycle} --- XX`);
-        // }
+        let cycleTarget = allCycles[0];
+        this.hackTotal = cycleTarget.hackTotal;
+        this.hackThreads = cycleTarget.hackThreads;
+        this.growThreads = cycleTarget.growThreads;
+        this.weakenHackThreads = cycleTarget.weakenHackThreads;
+        this.weakenGrowThreads = cycleTarget.weakenGrowThreads;
+        this.cycleTotal = cycleTarget.cycleTotal;
+        this.cycleBatchTime = cycleTarget.fullCycleTime;
 
-        return this.cycleTotal === 1 ? this.hackThreads >= hackThreadsFull : true;
+        return true;
     }
 
     reserveThreadsForExecution(ns, script, threads, offset = 0) {

@@ -12,7 +12,7 @@ export async function main(ns) {
 
     for (let faction of ns.getPlayer().factions) {
         const favor = ns.getFactionFavor(faction);
-        const targetRep = favorToRep(150);
+        const targetRep = favorToRep(75);
         const currentRep =
             ns.getFactionRep(faction) +
             (ns.getPlayer().currentWorkFactionName === faction ? ns.getPlayer().workRepGained : 0);
@@ -22,10 +22,10 @@ export async function main(ns) {
         const fTotal = repToFavor(currentRep + storedRep);
         const fGain = fTotal - favor;
 
-        if (favor > 150) continue;
+        if (favor > 75) continue;
 
         let successStr = "";
-        if (favor + fGain > 150) {
+        if (favor + fGain > 75) {
             successStr = " (SUCCESS)";
         }
 
