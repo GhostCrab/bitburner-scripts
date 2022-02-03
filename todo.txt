@@ -30,7 +30,8 @@
 [ ] hack: instead of canceling a batch when the script finish time finishes early, update the offset time to be accurate, re-insert it into the
     execute list and resort the execute list
 [ ] smart_hack_env.js: get simulator working.
-[ ] smart_hack_env.js: memoize cycle production results indexed by cycleThreadAllowance
+[ ] mcp.js: automatically join factions that dont exclude other factions
+[ ] sleeve.js: buy augmentations before reboot
 
 === Bitnodes ===
 

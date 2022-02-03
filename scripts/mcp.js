@@ -224,37 +224,47 @@ export async function main(ns) {
     allPurchaseableAugs = allPurchaseableAugs.sort((a, b) => b.price - a.price);
 
     // reorder array to buy dependent augs first and purge augs that cant be bought
-    // because of a missing dependency
-    for (let i = 0; i < allPurchaseableAugs.length; i++) {
-        let depName = allPurchaseableAugs[i].dep;
-        if (depName === undefined) continue;
+    // because of a missing dependency, need to loop multiple times until no more dependencies are found
+    while (true) {
+        let didDepMove = false;
+        for (let i = 0; i < allPurchaseableAugs.length; i++) {
+            let depName = allPurchaseableAugs[i].dep;
+            if (depName === undefined) continue;
 
-        let foundDep = false;
-        let j = i + 1;
-        while (j < allPurchaseableAugs.length) {
-            if (allPurchaseableAugs[j].name === depName) {
-                let tmp = allPurchaseableAugs[j];
-                // remove aug from current place
-                allPurchaseableAugs.splice(j, 1);
-                // place it before the main aug
-                allPurchaseableAugs.splice(i, 0, tmp);
-                foundDep = true;
-                i++;
-                break;
-            } else {
-                j++;
+            // check to see if we've already re-organized this dep
+            if (i !== 0 && allPurchaseableAugs[i-1].name === depName) continue;
+
+            let foundDep = false;
+            let j = i + 1;
+            while (j < allPurchaseableAugs.length) {
+                if (allPurchaseableAugs[j].name === depName) {
+                    let tmp = allPurchaseableAugs[j];
+                    // remove aug from current place
+                    allPurchaseableAugs.splice(j, 1);
+                    // place it before the main aug
+                    allPurchaseableAugs.splice(i, 0, tmp);
+                    foundDep = true;
+                    didDepMove = true;
+                    i++;
+                    break;
+                } else {
+                    j++;
+                }
+            }
+
+            // if we dont have the dependency queued, remove this aug from the buy list
+            if (!foundDep) {
+                ns.tprintf(
+                    "WARNING: Unable to find dependency %s:%s in the queue",
+                    allPurchaseableAugs[i].name,
+                    allPurchaseableAugs[i].dep
+                );
+                allPurchaseableAugs.splice(i, 1);
             }
         }
 
-        // if we dont have the dependency queued, remove this aug from the buy list
-        if (!foundDep) {
-            ns.tprintf(
-                "WARNING: Unable to find dependency %s:%s in the queue",
-                allPurchaseableAugs[i].name,
-                allPurchaseableAugs[i].dep
-            );
-            allPurchaseableAugs.splice(i, 1);
-        }
+        if (!didDepMove)
+            break;
     }
 
     if (allPurchaseableAugs.length > 0) {

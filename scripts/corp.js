@@ -814,6 +814,46 @@ export async function main(ns) {
             .products.map((prodname) => ns.corporation.getProduct(tbDivName, prodname))
             .sort((a, b) => Number(a.name) - Number(b.name));
 
+        for (const product of products) {
+            for (const [key, [qty, prod, sell]] of Object.entries(product.cityData)) {
+                const prodDeficit = prod + 0.00000001 - sell;
+                ns.tprintf(
+                    "        %10s-%s: qty: %8.2f prod: %5.2f sell: %5.2f diff: %5.2f",
+                    key,
+                    product.name,
+                    qty,
+                    prod,
+                    sell,
+                    prodDeficit
+                );
+            }
+        }
+
+        ////////////////////////////////////////
+        // look for optimal MP multiplier
+        // search state uses binary search to find equilibrium
+        // hold state uses small increments up or down to hold diff between -1 and 0 
+        // 
+        // Hold Mode:
+        // prod = production of the highest producing city
+        // if all diffs are <= 0 and all qty are < prod*10, start increasing
+        // if any diffs are > 0 start decreasing
+        // if all diffs are <= 0 and all qty are < prod*20, hold
+        //
+        // * start multiplier for new product at the same multiplier for the latest product
+        // 
+        // after research is > 10k, wait for the latest product to finish, find optimal MPMult for that product and get 3rd round of funding
+        //
+        // after 3rd round of funding, go public with 0 shares, set dividenend to 5%
+
+        // iterate over all leveled upgrades, incrementing if price < 1% of corp funds
+
+        // instead of using raw ms for the timestamp, use modulo of (ms / 1000 / 60 / 10)
+        //   to get a unique ID for every 10th minute of a day (double check this work)
+        //   The idea is to get more readable product ID's, maybe not necessary
+        // Alternatively, one could just use some kind of indexing system to figure out
+        //   an iteration scheme
+
         break;
 
         // mess with the price of products
@@ -834,7 +874,7 @@ export async function main(ns) {
                     prodDeficit
                 );
 
-                if (qty > 50 && prodDeficit > 0) {
+                if (qty > 1000 && prodDeficit > 0) {
                     reduceMult = true;
                     break;
                 }
@@ -848,8 +888,6 @@ export async function main(ns) {
                 ns.corporation.sellProduct(tbDivName, tbRDCity, product.name, "MAX", "MP*" + mpMult.toString(), true);
             }
         }
-
-        
 
         // compare price of increasing advertising vs increasing office space, do the cheaper if it's affordable
 
