@@ -20,7 +20,6 @@ function getCycleProductionLookup(ns, env) {
         CYCLE_PRODUCTION_LOOKUP[env.targetname] &&
         CYCLE_PRODUCTION_LOOKUP[env.targetname].hack === ns.getPlayer().hacking
     ) {
-        ns.tprintf("Hit %20s:%d", env.targetname, ns.getPlayer().hacking);
         return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
     }
 
@@ -387,7 +386,7 @@ export class SuperHackEnv {
     }
 
     numCycleForGrowth(ns, server, growth, player, cores = 1) {
-        let ajdGrowthRate = 1.03 / server.hackDifficulty;
+        let ajdGrowthRate = 1 + (1.03 - 1) / server.hackDifficulty;
         if (ajdGrowthRate > 1.0035) {
             ajdGrowthRate = 1.0035;
         }
@@ -903,11 +902,11 @@ export class SuperHackEnv {
 
         let startTime = Date.now();
         for (let exec of execs) {
-            ns.tprintf("Queuing   %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
+            //ns.tprintf("Queuing   %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
             while (Date.now() - startTime < exec.delay) {
                 await ns.sleep(20);
             }
-            ns.tprintf("Executing %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
+            //ns.tprintf("Executing %s:%s delay: %s", exec.host, exec.script, stFormat(ns, exec.delay, false, false));
             ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
         }
     }

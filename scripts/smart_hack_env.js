@@ -44,44 +44,28 @@ function getCycleProductionLookup(ns, env) {
         CYCLE_PRODUCTION_LOOKUP[env.targetname] &&
         CYCLE_PRODUCTION_LOOKUP[env.targetname].hack === ns.getPlayer().hacking
     ) {
-        ns.tprintf("Hit %20s:%d", env.targetname, ns.getPlayer().hacking);
         return CYCLE_PRODUCTION_LOOKUP[env.targetname].prod;
     }
 
-    let startTime = new Date().getTime();
     // memoize cycle production statistics indexed by cycleThreadAllowance
     let cycleProductionLookup = new Array(env.maxThreads + 1).fill(null);
 
     let hackThreads = Math.min(env.maxThreads, Math.floor(1 / env.hackPercentPerThread));
 
-    let crashCount = 0;
-    let assignCount = 0;
-    let hackAnalyzeSecurityCounter = 0;
-    let calcGrowThreadsCounter = 0;
-    let growthAnalyzeSecurity = 0;
     while (hackThreads > 0) {
         hackThreads--;
         let hackTotal = env.hackPercentPerThread * hackThreads * env.highMoney;
-        let c1 = new Date().getTime();
         let hackSecIncrease = ns.hackAnalyzeSecurity(hackThreads);
-        let c2 = new Date().getTime();
-        hackAnalyzeSecurityCounter += c2 - c1;
 
         let growMult = Math.max(env.highMoney / (env.highMoney - hackTotal), 1);
-        let c3 = new Date().getTime();
-        let growThreads = env.calcGrowThreads(ns, growMult);
-        let c4 = new Date().getTime();
-        calcGrowThreadsCounter += c4 - c3;
+        let growThreads = env.calcGrowThreads(ns, growMult, true);
 
         if (hackThreads + growThreads > env.maxThreads) {
             //ns.tprintf("h %d | g %d", hackThreads, growThreads)
             continue;
         }
 
-        let c5 = new Date().getTime();
         let growSecIncrease = ns.growthAnalyzeSecurity(growThreads);
-        let c6 = new Date().getTime();
-        growthAnalyzeSecurity += c6 - c5;
 
         let weakenHackThreads = Math.ceil(hackSecIncrease / env.weakenAmountPerThread);
         let weakenGrowThreads = Math.ceil(growSecIncrease / env.weakenAmountPerThread);
@@ -91,9 +75,8 @@ function getCycleProductionLookup(ns, env) {
         if (totalThreads > env.maxThreads) continue;
 
         if (cycleProductionLookup[totalThreads] !== null) {
-            crashCount++;
+            // do nothing
         } else {
-            assignCount++;
             cycleProductionLookup[totalThreads] = {
                 totalThreads: totalThreads,
                 hackTotal: hackTotal,
@@ -123,13 +106,12 @@ function getCycleProductionLookup(ns, env) {
     let endTime = new Date().getTime();
 
     // ns.tprintf(
-    //     "Calculated %20s:%d in %4dms | %d values | %4d | %4d",
+    //     "Calculated %20s:%d in %4dms | %d values | %4d",
     //     env.targetname,
     //     ns.getPlayer().hacking,
     //     endTime - startTime,
     //     env.maxThreads,
-    //     Math.floor(1 / env.hackPercentPerThread),
-    //     crashCount
+    //     Math.floor(1 / env.hackPercentPerThread)
     // );
 
     CYCLE_PRODUCTION_LOOKUP[env.targetname] = { hack: ns.getPlayer().hacking, prod: cycleProductionLookup };
@@ -308,14 +290,27 @@ export class SmartHackEnv {
         return Math.ceil(ns.getHackTime(this.targetname));
     }
 
-    hackAnalyze(ns) {
-        if (this.simEnabled) return ns.formulas.hacking.hackPercent(this.simTarget, this.simPlayer);
+    hackAnalyze(ns, assumeMinSec = false) {
+        if (this.simEnabled) {
+            if (assumeMinSec) {
+                let simTarget = Object.assign({}, this.simTarget);
+                simTarget.hackDifficulty = simTarget.minDifficulty;
+                return ns.formulas.hacking.hackPercent(simTarget, this.simPlayer);
+            }
+            return ns.formulas.hacking.hackPercent(this.simTarget, this.simPlayer);
+        }
+
+        if (assumeMinSec) {
+            let simTarget = ns.getServer(this.targetname);
+            simTarget.hackDifficulty = simTarget.minDifficulty;
+            return ns.formulas.hacking.hackPercent(simTarget, ns.getPlayer());
+        }
 
         return ns.hackAnalyze(this.targetname);
     }
 
     numCycleForGrowth(ns, server, growth, player, cores = 1) {
-        let ajdGrowthRate = 1.03 / server.hackDifficulty;
+        let ajdGrowthRate = 1 + (1.03 - 1) / server.hackDifficulty;
         if (ajdGrowthRate > 1.0035) {
             ajdGrowthRate = 1.0035;
         }
@@ -335,10 +330,23 @@ export class SmartHackEnv {
     }
 
     /** @param {import(".").NS } ns */
-    calcGrowThreads(ns, _growMult) {
+    calcGrowThreads(ns, _growMult, assumeMinSec = false) {
         let growMult = _growMult === undefined ? this.growMult : _growMult;
         if (growMult < 1) return 0;
-        if (this.simEnabled) return Math.ceil(this.numCycleForGrowth(ns, this.simTarget, growMult, this.simPlayer));
+        if (this.simEnabled) {
+            if (assumeMinSec) {
+                let simTarget = Object.assign({}, this.simTarget);
+                simTarget.hackDifficulty = simTarget.minDifficulty;
+                return Math.ceil(this.numCycleForGrowth(ns, simTarget, growMult, this.simPlayer));
+            }
+            return Math.ceil(this.numCycleForGrowth(ns, this.simTarget, growMult, this.simPlayer));
+        }
+
+        if (assumeMinSec) {
+            let simTarget = ns.getServer(this.targetname);
+            simTarget.hackDifficulty = simTarget.minDifficulty;
+            return Math.ceil(this.numCycleForGrowth(ns, simTarget, growMult, ns.getPlayer()));
+        }
 
         return Math.ceil(ns.growthAnalyze(this.targetname, growMult, this.cores));
     }
@@ -348,7 +356,7 @@ export class SmartHackEnv {
         if (this.isWRunning(ns)) {
             // process in progress, wait for next refresh to update
             await ns.sleep(1000);
-            return;
+            return true;
         }
 
         // Host state
@@ -364,7 +372,8 @@ export class SmartHackEnv {
 
         // Hack Info
         this.hackTime = this.getHackTime(ns);
-        this.hackPercentPerThread = this.hackAnalyze(ns);
+        this.hackPercentPerThread = this.hackAnalyze(ns, true);
+
         this.hackThreads = 1 / this.hackPercentPerThread - 1;
         this.hackTotal = this.hackPercentPerThread * this.hackThreads * this.money;
         this.hackSecIncrease = ns.hackAnalyzeSecurity(this.hackThreads);
@@ -391,9 +400,12 @@ export class SmartHackEnv {
         let primaryThreadsTotal = primaryGrowThreads + primaryWeakenThreads;
         if (primarySecDiff < 1 && primaryGrowMult < 1.05) primaryThreadsTotal = 0; // dont bother with the grow/weaken cycle if we're already very close to optimal
 
-        if (primaryThreadsTotal > this.maxThreads) {
-            ns.tprintf("ERROR: Unable to allocate enough threads to primary cycle, use super_hack_adv algorithm");
-            return false;
+        while (primaryThreadsTotal > this.maxThreads) {
+            primaryGrowThreads--;
+            primaryGrowSecIncrease = ns.growthAnalyzeSecurity(primaryGrowThreads);
+            primarySecDiff = this.security - this.lowSecurity;
+            primaryWeakenThreads = Math.ceil((primaryGrowSecIncrease + primarySecDiff) / this.weakenAmountPerThread);
+            primaryThreadsTotal = primaryGrowThreads + primaryWeakenThreads;
         }
 
         // memoize cycle production statistics indexed by cycleThreadAllowance
@@ -402,14 +414,6 @@ export class SmartHackEnv {
         // Get all cycle combination production statistics
         let allCycles = [];
         for (let cycleTotal = 1; cycleTotal <= this.cycleMax; cycleTotal++) {
-            if (cycleTotal === 1 && primaryThreadsTotal > 0) {
-                allCycles.push({
-                    cycleTotal: cycleTotal,
-                    production: 1,
-                });
-                continue;
-            }
-
             let usableThreads = this.maxThreads - primaryThreadsTotal;
             let usableCycles = primaryThreadsTotal > 0 ? cycleTotal - 1 : cycleTotal;
             let fullCycleTime = this.cycleFullTime + this.cycleSpacer * (cycleTotal - 1);
@@ -417,6 +421,21 @@ export class SmartHackEnv {
             let cycleThreadAllowance = Math.floor(usableThreads / usableCycles);
 
             let cycleStats = cycleProductionLookup[cycleThreadAllowance];
+
+            if (cycleTotal === 1 && primaryThreadsTotal > 0) {
+                allCycles.push({
+                    cycleTotal: cycleTotal,
+                    hackTotal: 1,
+                    production: 1,
+                    fullCycleTime: fullCycleTime,
+                    hackThreads: 0,
+                    growThreads: 0,
+                    weakenHackThreads: 0,
+                    weakenGrowThreads: 0,
+                    percentPerCycle: 0,
+                });
+                continue;
+            }
 
             if (cycleStats === undefined) {
                 ns.print(ns.sprintf("WARNING: Thread Total %s is undefined", cycleThreadAllowance));
@@ -440,6 +459,7 @@ export class SmartHackEnv {
         //this.debugPrintCycleStats(ns, primaryThreadsTotal, allCycles);
 
         let cycleTarget = allCycles[0];
+
         this.hackTotal = cycleTarget.hackTotal;
         this.hackThreads = cycleTarget.hackThreads;
         this.growThreads = cycleTarget.growThreads;
@@ -516,6 +536,8 @@ export class SmartHackEnv {
 
         await this.execute(ns);
         this.resetThreads();
+
+        return true;
     }
 
     debugPrintCycleStats(ns, primaryThreadsTotal, allCycles) {
@@ -529,14 +551,18 @@ export class SmartHackEnv {
             }
             let cycleMem = cycleThreads * this.threadSize;
             ns.tprintf(
-                "%3d  %9s/s %5.2f %d/%4d/%5d %6dGB",
+                "%3d  %9s/s %5.2f %d/%4d/%5d %6dGB, %s|%s|%s|%s",
                 cycle.cycleTotal,
                 ns.nFormat(cycle.production, "($0.000a)"),
                 cycle.percentPerCycle ? cycle.percentPerCycle : 0,
                 primaryThreadsTotal,
                 batchThreads,
                 cycleThreads,
-                cycleMem
+                cycleMem,
+                cycle.hackThreads,
+                cycle.growThreads,
+                cycle.weakenHackThreads,
+                cycle.weakenGrowThreads
             );
         }
     }
@@ -557,21 +583,19 @@ export class SmartHackEnv {
 
         ns.print(
             ns.sprintf(
-                "%8s SMART: %s => Hack %d; Grow %d; Hack/Grow Weaken %d/%d; Total Threads %d/%d; Total Cycles %d/%d; Time +%s:+%s [%s:%s]",
+                "%8s SMART: %s => H %d|%d; G %d|%d; T %d|%d; Cycles %s/%s; Complete [%s -%s]",
                 new Date().toLocaleTimeString("it-IT"),
                 this.targetname,
                 this.hackThreads,
-                this.growThreads,
                 this.weakenHackThreads,
+                this.growThreads,
                 this.weakenGrowThreads,
                 this.threadsPerCycle,
                 this.threadsPerCycle * this.cycleTotal,
                 this.cycleTotal,
                 this.cycleMax,
-                stFormat(ns, this.weakenTime),
-                stFormat(ns, this.cycleBatchTime),
-                stdFormat(ns, this.weakenTime),
-                stdFormat(ns, this.cycleBatchTime)
+                stdFormat(ns, this.cycleBatchTime),
+                stFormat(ns, this.cycleBatchTime - this.weakenTime)
             )
         );
     }
@@ -593,6 +617,10 @@ export class SmartHackEnv {
         }
 
         execs = execs.sort((a, b) => b.delay - a.delay);
+
+        // for (const exec of execs) {
+        //     ns.tprintf("%s %s %s %s", exec.script, exec.threads, exec.delay, exec.batchId);
+        // }
 
         this.waitPID = 0;
         let waitPIDFinishTime = 0;

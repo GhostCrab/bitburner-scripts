@@ -10,7 +10,8 @@ export async function main(ns) {
     let env = new SmartHackEnv(ns, ns.args[1], ns.args[0]);
     await env.init(ns)
 
-    while (true) {
-        await env.refresh(ns);
+    let result = true;
+    while (result) {
+        result = await env.refresh(ns);
     }
 }

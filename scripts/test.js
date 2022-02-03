@@ -7,21 +7,21 @@ function calcIncome(ns, target, allHostnames, simMinutes = 2) {
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    ns.tprintf("%s", ns.heart.break())
+    // ns.tprintf("%s", ns.heart.break())
 
-    setns(ns);
+    // setns(ns);
 
-    cleanLogs();
+    // cleanLogs();
 
-    let allHostnames = allHosts();
+    // let allHostnames = allHosts();
 
-    let orderedTargetArr = allHostnames
-        .filter(serverIsHackable)
-        .filter((x) => ns.getServerMaxMoney(x) > 1)
-        .map((x) => [x, calcIncome(ns, x, allHostnames, ns.args[0])])
-        .sort((a, b) => b[1] - a[1]);
+    // let orderedTargetArr = allHostnames
+    //     .filter(serverIsHackable)
+    //     .filter((x) => ns.getServerMaxMoney(x) > 1)
+    //     .map((x) => [x, calcIncome(ns, x, allHostnames, ns.args[0])])
+    //     .sort((a, b) => b[1] - a[1]);
 
-    for (const [target, income] of orderedTargetArr) {
-        ns.tprintf("%15s: %s/s", target, ns.nFormat(income, "($0.000a)"));
-    }
+    // for (const [target, income] of orderedTargetArr) {
+    //     ns.tprintf("%15s: %s/s", target, ns.nFormat(income, "($0.000a)"));
+    // }
 }
