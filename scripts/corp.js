@@ -499,11 +499,7 @@ export async function main(ns) {
             await ns.sleep(1000);
         }
 
-        doLog(
-            ns,
-            "Investment round 2: %s warehouses are full, initiating bulk sell-off to woo investors",
-            agDivName
-        );
+        doLog(ns, "Investment round 2: %s warehouses are full, initiating bulk sell-off to woo investors", agDivName);
 
         for (const city of ns.corporation.getDivision(agDivName).cities) {
             ns.corporation.sellMaterial(agDivName, city, "Food", "MAX", "MP*0.9");
@@ -836,49 +832,15 @@ export async function main(ns) {
         }
 
         if (doUpdate && !didUpdate) {
-            doLog(ns, "Doing Update");
+            //doLog(ns, "Doing Update");
+
+            didUpdate = true;
 
             // Attempt to max out Wilson Analytics
-            while (ns.corporation.getUpgradeLevelCost("Wilson Analytics") < ns.corporation.getCorporation().funds) {
+            while (ns.corporation.getUpgradeLevelCost("Wilson Analytics") < ns.corporation.getCorporation().funds * 0.5) {
                 let upgradeCost = ns.corporation.getUpgradeLevelCost("Wilson Analytics");
-                doLog(
-                    ns,
-                    "Purchasing %s upgrade for %s",
-                    "Wilson Analytics",
-                    ns.nFormat(upgradeCost, "($0.000a)")
-                );
+                doLog(ns, "Purchasing %s upgrade for %s", "Wilson Analytics", ns.nFormat(upgradeCost, "($0.000a)"));
                 ns.corporation.levelUpgrade("Wilson Analytics");
-            }
-
-            let leveledUpgrades = [
-                "Smart Factories",
-                "Smart Storage",
-                "DreamSense",
-                "Nuoptimal Nootropic Injector Implants",
-                "Speech Processor Implants",
-                "Neural Accelerators",
-                "FocusWires",
-                "ABC SalesBots",
-                "Project Insight",
-            ];
-            for (const upgrade of leveledUpgrades) {
-                let upgradeCount = 0;
-                let upgradeCost = 0;
-                while (ns.corporation.getUpgradeLevelCost(upgrade) < ns.corporation.getCorporation().funds * 0.01) {
-                    upgradeCost += ns.corporation.getUpgradeLevelCost(upgrade);
-                    upgradeCount++;
-                    ns.corporation.levelUpgrade(upgrade);
-                }
-
-                if (upgradeCount > 0) {
-                    doLog(
-                        ns,
-                        "Purchased %dx %s upgrade for %s",
-                        upgradeCount,
-                        upgrade,
-                        ns.nFormat(upgradeCost, "($0.000a)")
-                    );
-                }
             }
 
             let maxProducts = 3;
@@ -938,8 +900,7 @@ export async function main(ns) {
 
             // mess with the price of products
             for (const product of products) {
-                if (product.developmentProgress < 100)
-                    continue
+                if (product.developmentProgress < 100) continue;
                 let mpMult = Number(product.sCost.slice(3));
                 let reduceMult = false;
                 let increaseMult = 0;
@@ -955,7 +916,7 @@ export async function main(ns) {
 
                 if (reduceMult) {
                     let oldmpMult = mpMult;
-                    mpMult = Math.max(Math.floor(mpMult * 0.9), 1);
+                    mpMult = Math.max(Math.floor(mpMult * 0.975), 1);
 
                     doLog(ns, "Reducing %s mpMult %d => %d", product.name, oldmpMult, mpMult);
                     ns.corporation.sellProduct(
@@ -1114,7 +1075,103 @@ export async function main(ns) {
                 await ns.corporation.setAutoJobAssignment(tbDivName, city, "Research & Development", officeSize / 5);
             }
 
-            didUpdate = true;
+            let leveledUpgrades = [
+                "Project Insight",
+                "Nuoptimal Nootropic Injector Implants",
+                "Smart Factories",
+                "DreamSense",
+                "Speech Processor Implants",
+                "Neural Accelerators",
+                "FocusWires",
+                "ABC SalesBots",
+                "Smart Storage",
+            ];
+            for (const upgrade of leveledUpgrades) {
+                let upgradeCount = 0;
+                let upgradeCost = 0;
+                while (ns.corporation.getUpgradeLevelCost(upgrade) < ns.corporation.getCorporation().funds * 0.01) {
+                    upgradeCost += ns.corporation.getUpgradeLevelCost(upgrade);
+                    upgradeCount++;
+                    ns.corporation.levelUpgrade(upgrade);
+                }
+
+                if (upgradeCount > 0) {
+                    doLog(
+                        ns,
+                        "Purchased %dx %s upgrade for %s",
+                        upgradeCount,
+                        upgrade,
+                        ns.nFormat(upgradeCost, "($0.000a)")
+                    );
+                }
+            }
+
+            // attempt to expand to additional divisions to improve valuation
+            const divisions = [
+                "Food",
+                "Software",
+                "Chemical",
+                "Fishing",
+                "Utilities",
+                "Pharmaceutical",
+                "Energy",
+                "Mining",
+                "Computer",
+                "RealEstate",
+                "Healthcare",
+                "Robotics",
+            ];
+            for (const division of divisions) {
+                if (
+                    ns.corporation.getCorporation().divisions.find((div) => div.type === division) === undefined &&
+                    ns.corporation.getExpandIndustryCost(division) < ns.corporation.getCorporation().funds
+                ) {
+                    let divCost = ns.corporation.getExpandIndustryCost(division);
+                    doLog(ns, "Starting %s division for %s", division, ns.nFormat(divCost, "($0.000a)"));
+
+                    ns.corporation.expandIndustry(division, division);
+                }
+            }
+
+            // If all divisions have been built and a 3rd round investment offer is made for > $1q, accept
+            let offer = ns.corporation.getInvestmentOffer();
+            if (
+                ns.corporation.getCorporation().divisions.length === 14 &&
+                offer.round === 3 &&
+                offer.funds > 1000000000000000
+            ) {
+                ns.corporation.acceptInvestmentOffer();
+                doLog(
+                    ns,
+                    "Investment round 3: Taking offer of %s for %d%%",
+                    ns.nFormat(offer.funds, "(0.000a)"),
+                    (offer.shares / 1000000000) * 100
+                );
+            }
+
+            // Buy Research Upgrades -- buy after high priority researches, and only if purchase cost is < 5% of total research
+            let lowPriorityResearches = [
+                "Automatic Drug Administration",
+                "CPH4 Injections",
+                "Drones",
+                "Drones - Assembly",
+                "Drones - Transport",
+                "Go-Juice",
+                "JoyWire",
+                "Overclock",
+                "Self-Correcting Assemblers",
+                "Sti.mu",
+            ];
+
+            // High Priority - buy when purchase cost is 50% of total research
+            let highPriorityResearches = [
+                "Hi-Tech R&D Laboratory",
+                "Market-TA.I",
+                "Market-TA.II",
+                "uPgrade: Fulcrum",
+                "uPgrade: Capacity.I",
+                "uPgrade: Capacity.II",
+            ];
         }
 
         await ns.sleep(20);

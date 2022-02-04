@@ -7,6 +7,7 @@ function calcIncome(ns, target, allHostnames, simMinutes = 2) {
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
+    ns.tprintf("%s ", ns.corporation.getInvestmentOffer().round)
     // ns.tprintf("%s", ns.heart.break())
 
     // setns(ns);
