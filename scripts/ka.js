@@ -8,9 +8,16 @@ export async function main(ns) {
         ns.killall(hostname);
     }
 
-	for (let ps of ns.ps("home")) {
-		if (ps.filename === "ka.js" || ps.filename === "clock.js" || ps.filename === "leech.js" || ps.filename === "hacknet.js" || ps.filename === "hacking_gang.js")
-			continue
-    	ns.kill(ps.pid)
-	}
+    for (let ps of ns.ps("home")) {
+        if (
+            ps.filename === "ka.js" ||
+            ps.filename === "clock.js" ||
+            ps.filename === "leech.js" ||
+            ps.filename === "hacknet.js" ||
+            ps.filename === "hacking_gang.js" ||
+			ps.filename === "corp.js"
+        )
+            continue;
+        ns.kill(ps.pid);
+    }
 }

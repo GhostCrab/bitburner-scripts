@@ -44,7 +44,7 @@ export async function main(ns) {
     // }
 
     while (true) {// (!ns.getPlayer().factions.includes("NiteSec")) {
-        await ns.sleep(ns.commitCrime("homicide") + 200);
+        await ns.sleep(ns.commitCrime("mug") + 200);
 
         let allFactions = ns.getPlayer().factions.concat(ns.checkFactionInvitations());
         if (allFactions.includes("NiteSec")) {

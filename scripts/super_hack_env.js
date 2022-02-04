@@ -26,7 +26,7 @@ function getCycleProductionLookup(ns, env) {
     let startTime = new Date().getTime();
     // memoize cycle production statistics indexed by cycleThreadAllowance
     let cycleProductionLookup = new Array(env.maxThreads + 1).fill(null);
-    
+
     let hackThreads = Math.min(env.maxThreads, Math.floor(1 / env.hackPercentPerThread));
 
     let crashCount = 0;
@@ -295,7 +295,7 @@ export class SuperHackEnv {
 
         this.maxThreads = 0;
         this.hosts.map((x) => (this.maxThreads += x.maxThreads), this);
-        this.maxThreads = Math.min(1000000, this.maxThreads)
+        this.maxThreads = Math.min(1000000, this.maxThreads);
     }
 
     async init(ns, force = false) {
@@ -711,6 +711,18 @@ export class SuperHackEnv {
         }
 
         allCycles = allCycles.sort((a, b) => b.production - a.production);
+
+        if (allCycles[0] === undefined) {
+            this.hackTotal = 0;
+            this.hackThreads = 0;
+            this.growThreads = 0;
+            this.weakenHackThreads = 0;
+            this.weakenGrowThreads = 0;
+            this.cycleTotal = 1;
+            this.cycleBatchTime = this.weakenTime;
+
+            return false;
+        }
 
         let cycleTarget = allCycles[0];
         this.hackTotal = cycleTarget.hackTotal;
@@ -1229,7 +1241,6 @@ export class SuperHackEnv {
     fastSim(ns, time) {
         this.resetSim(ns);
         this.simEnabled = true;
-        
 
         this.updateForW(ns);
         while (!this.doneWeaken(ns)) {

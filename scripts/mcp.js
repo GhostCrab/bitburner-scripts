@@ -77,7 +77,7 @@ class Augmentation {
 
     isHackUseful() {
         if (this.name === "Neuroflux Governor") return false;
-        return true;
+        //return true;
         if (this.stats.company_rep_mult) return true;
         if (this.stats.faction_rep_mult) return true;
         if (this.stats.hacking_chance_mult) return true;
@@ -86,6 +86,11 @@ class Augmentation {
         if (this.stats.hacking_money_mult) return true;
         if (this.stats.hacking_mult) return true;
         if (this.stats.hacking_speed_mult) return true;
+        if (this.stats.hacknet_node_core_cost_mult) return true;
+        if (this.stats.hacknet_node_level_cost_mult) return true;
+        if (this.stats.hacknet_node_money_mult) return true;
+        if (this.stats.hacknet_node_purchase_cost_mult) return true;
+        if (this.stats.hacknet_node_ram_cost_mult) return true;
         if (
             this.name === "BitRunners Neurolink" ||
             this.name === "CashRoot Starter Kit" ||
@@ -232,7 +237,7 @@ export async function main(ns) {
             if (depName === undefined) continue;
 
             // check to see if we've already re-organized this dep
-            if (i !== 0 && allPurchaseableAugs[i-1].name === depName) continue;
+            if (i !== 0 && allPurchaseableAugs[i - 1].name === depName) continue;
 
             let foundDep = false;
             let j = i + 1;
@@ -263,8 +268,7 @@ export async function main(ns) {
             }
         }
 
-        if (!didDepMove)
-            break;
+        if (!didDepMove) break;
     }
 
     if (allPurchaseableAugs.length > 0) {
@@ -290,28 +294,27 @@ export async function main(ns) {
         let mult = 1;
         let total = Number.MAX_SAFE_INTEGER;
         let startAug = 0;
-        let purchaseableAugs = allPurchaseableAugs.filter(a => a.name !== "The Red Pill")
+        let purchaseableAugs = allPurchaseableAugs.filter((a) => a.name !== "The Red Pill");
         while (startAug < purchaseableAugs.length) {
-            total = 0
-            mult = 1
+            total = 0;
+            mult = 1;
             for (let augIdx = startAug; augIdx < purchaseableAugs.length; augIdx++) {
                 total += purchaseableAugs[augIdx].price * mult;
                 mult *= 1.9;
             }
 
-            if (total < ns.getPlayer().money)
-                break;
-            
-            startAug++
+            if (total < ns.getPlayer().money) break;
+
+            startAug++;
         }
 
         if (startAug === purchaseableAugs.length) {
-            ns.tprintf("All augs too expensive")
-            return
+            ns.tprintf("All augs too expensive");
+            return;
         }
 
-        total = 0
-        mult = 1
+        total = 0;
+        mult = 1;
         for (let augIdx = startAug; augIdx < purchaseableAugs.length; augIdx++) {
             if (ns.args[0]) ns.purchaseAugmentation(purchaseableAugs[augIdx].faction, purchaseableAugs[augIdx].name);
             ns.tprintf(

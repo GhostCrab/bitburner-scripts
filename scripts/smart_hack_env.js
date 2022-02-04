@@ -1,5 +1,5 @@
 export const debug = false;
-export const TSPACER = 100;
+export const TSPACER = 400;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
