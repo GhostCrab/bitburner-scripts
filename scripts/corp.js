@@ -1,36 +1,10 @@
-import { setns, cleanLogs } from "./util.js";
+import { cleanLogs, llog } from "./util.js";
 
 const CITIES = ["Aevum", "Chongqing", "Sector-12", "New Tokyo", "Ishima", "Volhaven"];
 
-function stFormat(ns, ms, showms = true, showfull = false) {
-    let timeLeft = ms;
-    let hours = Math.floor(ms / (1000 * 60 * 60));
-    timeLeft -= hours * (1000 * 60 * 60);
-    let minutes = Math.floor(timeLeft / (1000 * 60));
-    timeLeft -= minutes * (1000 * 60);
-    let seconds = Math.floor(timeLeft / 1000);
-    timeLeft -= seconds * 1000;
-    let milliseconds = timeLeft;
-
-    if (showms) {
-        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds);
-        if (minutes > 0) return ns.sprintf("%02d:%02d.%03d", minutes, seconds, milliseconds);
-        return ns.sprintf("%02d.%03d", seconds, milliseconds);
-    } else {
-        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d", hours, minutes, seconds);
-        if (minutes > 0) return ns.sprintf("%02d:%02d", minutes, seconds);
-        return ns.sprintf("%02d", seconds);
-    }
-}
-
-function doLog(ns, str, ...args) {
-    ns.print(ns.sprintf("%8s " + str, new Date().toLocaleTimeString("it-IT"), ...args));
-}
-
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    setns(ns);
-    cleanLogs();
+    cleanLogs(ns);
 
     const agDivName = "Agriculture";
     const tbDivName = "Tobacco";
@@ -39,7 +13,7 @@ export async function main(ns) {
     try {
         ns.corporation.getCorporation();
     } catch (e) {
-        doLog(ns, "Created Corporation for $150b");
+        llog(ns, "Created Corporation for $150b");
         ns.corporation.createCorporation("Corporation", true);
     }
 
@@ -47,7 +21,7 @@ export async function main(ns) {
     if (ns.corporation.getCorporation().divisions.find((div) => div.type === agDivName) === undefined) {
         let divCost = ns.corporation.getExpandIndustryCost(agDivName);
 
-        doLog(ns, "Starting %s division for %s", agDivName, ns.nFormat(divCost, "($0.000a)"));
+        llog(ns, "Starting %s division for %s", agDivName, ns.nFormat(divCost, "($0.000a)"));
 
         ns.corporation.expandIndustry(agDivName, agDivName);
     }
@@ -59,7 +33,7 @@ export async function main(ns) {
             let corpFunds = ns.corporation.getCorporation().funds;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase %s %s < %s",
                     upgrade,
@@ -67,7 +41,7 @@ export async function main(ns) {
                     ns.nFormat(upgradeCost, "($0.000a)")
                 );
             } else {
-                doLog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
+                llog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
                 ns.corporation.unlockUpgrade(upgrade);
             }
         }
@@ -88,7 +62,7 @@ export async function main(ns) {
             let corpFunds = ns.corporation.getCorporation().funds;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase %s %s < %s",
                     upgrade,
@@ -97,7 +71,7 @@ export async function main(ns) {
                 );
                 break;
             } else {
-                doLog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
+                llog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
                 ns.corporation.levelUpgrade(upgrade);
             }
         }
@@ -106,7 +80,7 @@ export async function main(ns) {
     // Check primary city's warehouse and upgrade to 500
     const primaryCity = ns.corporation.getDivision(agDivName).cities[0];
     if (!ns.corporation.hasWarehouse(agDivName, primaryCity)) {
-        doLog(ns, "ERROR: %s primary city %s does not have a warehouse", agDivName, primaryCity);
+        llog(ns, "ERROR: %s primary city %s does not have a warehouse", agDivName, primaryCity);
         return;
     }
 
@@ -116,7 +90,7 @@ export async function main(ns) {
         let startSize = ns.corporation.getWarehouse(agDivName, primaryCity).size;
 
         if (corpFunds < upgradeCost) {
-            doLog(
+            llog(
                 ns,
                 "WARNING: Insufficient funds to purchase a warehouse upgrade %s < %s",
                 ns.nFormat(corpFunds, "($0.000a)"),
@@ -125,7 +99,7 @@ export async function main(ns) {
         } else {
             ns.corporation.upgradeWarehouse(agDivName, primaryCity);
             let endSize = ns.corporation.getWarehouse(agDivName, primaryCity).size;
-            doLog(
+            llog(
                 ns,
                 "Upgraded %s %s's warehouse size from %s to %s for %s",
                 agDivName,
@@ -138,7 +112,7 @@ export async function main(ns) {
     }
 
     if (ns.corporation.getWarehouse(agDivName, primaryCity).size < 500) {
-        doLog(
+        llog(
             ns,
             "ERROR: %s primary city %s's warehouse is too small %d < 500",
             agDivName,
@@ -157,7 +131,7 @@ export async function main(ns) {
 
         while (ns.corporation.getMaterial(agDivName, primaryCity, "Real Estate").qty === 0) await ns.sleep(5);
 
-        doLog(ns, "Purchased Round 1 of %s production materials in %s", agDivName, primaryCity);
+        llog(ns, "Purchased Round 1 of %s production materials in %s", agDivName, primaryCity);
 
         ns.corporation.buyMaterial(agDivName, primaryCity, "Hardware", 0);
         ns.corporation.buyMaterial(agDivName, primaryCity, "AI Cores", 0);
@@ -168,7 +142,7 @@ export async function main(ns) {
 
     // Attempt to get first round of funding
     while (ns.corporation.getInvestmentOffer().round < 2) {
-        doLog(ns, "Investment round 1: waiting for %s %s warehouse to fill", agDivName, primaryCity);
+        llog(ns, "Investment round 1: waiting for %s %s warehouse to fill", agDivName, primaryCity);
 
         // Sell plants but not food (food is more expensive per unit)
         ns.corporation.sellMaterial(agDivName, primaryCity, "Food", "0", "0");
@@ -181,7 +155,7 @@ export async function main(ns) {
             await ns.sleep(1000);
         }
 
-        doLog(
+        llog(
             ns,
             "Investment round 1: %s %s warehouse is full, initiating bulk sell-off to woo investors",
             agDivName,
@@ -199,7 +173,7 @@ export async function main(ns) {
             // only take offers over $335b
             if (offer.funds > 335000000000) {
                 ns.corporation.acceptInvestmentOffer();
-                doLog(
+                llog(
                     ns,
                     "Investment round 1: Taking offer of %s for %d%%",
                     ns.nFormat(offer.funds, "(0.000a)"),
@@ -217,7 +191,7 @@ export async function main(ns) {
         }
 
         if (!tookOffer) {
-            doLog(
+            llog(
                 ns,
                 "Investment round 1: Failed to generate an offer over $335b (best: %s for %d%%)",
                 ns.nFormat(bestOffer.funds, "(0.000a)"),
@@ -237,7 +211,7 @@ export async function main(ns) {
             let corpFunds = ns.corporation.getCorporation().funds;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "ERROR: Insufficient funds to purchase %s %s < %s",
                     upgrade,
@@ -246,7 +220,7 @@ export async function main(ns) {
                 );
                 return;
             } else {
-                doLog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
+                llog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
                 ns.corporation.unlockUpgrade(upgrade);
             }
         }
@@ -258,7 +232,7 @@ export async function main(ns) {
         let corpFunds = ns.corporation.getCorporation().funds;
 
         if (corpFunds < expandCost) {
-            doLog(
+            llog(
                 ns,
                 "ERROR: Insufficient funds to expand %s to %s %s < %s",
                 agDivName,
@@ -269,7 +243,7 @@ export async function main(ns) {
 
             return;
         } else {
-            doLog(ns, "Expanding %s to %s for %s", agDivName, city, ns.nFormat(expandCost, "($0.000a)"));
+            llog(ns, "Expanding %s to %s for %s", agDivName, city, ns.nFormat(expandCost, "($0.000a)"));
             ns.corporation.expandCity(agDivName, city);
         }
     }
@@ -281,7 +255,7 @@ export async function main(ns) {
             let corpFunds = ns.corporation.getCorporation().funds;
 
             if (warehouseCost <= corpFunds) {
-                doLog(
+                llog(
                     ns,
                     "Purchasing a %s warehouse in %s for %s",
                     agDivName,
@@ -290,7 +264,7 @@ export async function main(ns) {
                 );
                 ns.corporation.purchaseWarehouse(agDivName, city);
             } else {
-                doLog(
+                llog(
                     ns,
                     "Insufficient funds to purchase a %s warehouse in %s %s < %s",
                     agDivName,
@@ -309,7 +283,7 @@ export async function main(ns) {
             let startSize = ns.corporation.getWarehouse(agDivName, city).size;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase a warehouse upgrade %s < %s",
                     ns.nFormat(corpFunds, "($0.000a)"),
@@ -318,7 +292,7 @@ export async function main(ns) {
             } else {
                 ns.corporation.upgradeWarehouse(agDivName, city);
                 let endSize = ns.corporation.getWarehouse(agDivName, city).size;
-                doLog(
+                llog(
                     ns,
                     "Upgraded %s %s's warehouse size from %s to %s for %s",
                     agDivName,
@@ -349,7 +323,7 @@ export async function main(ns) {
         let corpFunds = ns.corporation.getCorporation().funds;
 
         if (corpFunds < upgradeCost) {
-            doLog(
+            llog(
                 ns,
                 "ERROR: Insufficient funds to increase %s %s office size to 9 %s < %s",
                 agDivName,
@@ -359,7 +333,7 @@ export async function main(ns) {
             );
             return;
         } else {
-            doLog(
+            llog(
                 ns,
                 "Purchasing %d additional office positions in %s %s for %s",
                 9 - ns.corporation.getOffice(agDivName, city).size,
@@ -393,7 +367,7 @@ export async function main(ns) {
 
             while (ns.corporation.getMaterial(agDivName, city, "Real Estate").qty === 0) await ns.sleep(5);
 
-            doLog(ns, "Purchased Round 1 of %s production materials in %s", agDivName, city);
+            llog(ns, "Purchased Round 1 of %s production materials in %s", agDivName, city);
 
             ns.corporation.buyMaterial(agDivName, city, "Hardware", 0);
             ns.corporation.buyMaterial(agDivName, city, "AI Cores", 0);
@@ -409,7 +383,7 @@ export async function main(ns) {
             let corpFunds = ns.corporation.getCorporation().funds;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase %s %s < %s",
                     upgrade,
@@ -418,7 +392,7 @@ export async function main(ns) {
                 );
                 break;
             } else {
-                doLog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
+                llog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
                 ns.corporation.levelUpgrade(upgrade);
             }
         }
@@ -432,7 +406,7 @@ export async function main(ns) {
             let startSize = ns.corporation.getWarehouse(agDivName, city).size;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase a warehouse upgrade %s < %s",
                     ns.nFormat(corpFunds, "($0.000a)"),
@@ -441,7 +415,7 @@ export async function main(ns) {
             } else {
                 ns.corporation.upgradeWarehouse(agDivName, city);
                 let endSize = ns.corporation.getWarehouse(agDivName, city).size;
-                doLog(
+                llog(
                     ns,
                     "Upgraded %s %s's warehouse size from %s to %s for %s",
                     agDivName,
@@ -464,7 +438,7 @@ export async function main(ns) {
 
             while (ns.corporation.getMaterial(agDivName, city, "Real Estate").qty < 140000) await ns.sleep(5);
 
-            doLog(ns, "Purchased Round 2 of %s production materials in %s", agDivName, city);
+            llog(ns, "Purchased Round 2 of %s production materials in %s", agDivName, city);
 
             ns.corporation.buyMaterial(agDivName, city, "Hardware", 0);
             ns.corporation.buyMaterial(agDivName, city, "Robots", 0);
@@ -475,7 +449,7 @@ export async function main(ns) {
 
     // Attempt to get second round of funding
     while (ns.corporation.getInvestmentOffer().round < 3) {
-        doLog(ns, "Investment round 2: waiting for %s warehouses to fill", agDivName);
+        llog(ns, "Investment round 2: waiting for %s warehouses to fill", agDivName);
 
         // Sell plants but not food (food is more expensive per unit)
         for (const city of ns.corporation.getDivision(agDivName).cities) {
@@ -499,7 +473,7 @@ export async function main(ns) {
             await ns.sleep(1000);
         }
 
-        doLog(ns, "Investment round 2: %s warehouses are full, initiating bulk sell-off to woo investors", agDivName);
+        llog(ns, "Investment round 2: %s warehouses are full, initiating bulk sell-off to woo investors", agDivName);
 
         for (const city of ns.corporation.getDivision(agDivName).cities) {
             ns.corporation.sellMaterial(agDivName, city, "Food", "MAX", "MP*0.9");
@@ -514,7 +488,7 @@ export async function main(ns) {
             //only take offers over $10t
             if (offer.funds > 10000000000000) {
                 ns.corporation.acceptInvestmentOffer();
-                doLog(
+                llog(
                     ns,
                     "Investment round 2: Taking offer of %s for %d%%",
                     ns.nFormat(offer.funds, "(0.000a)"),
@@ -532,7 +506,7 @@ export async function main(ns) {
         }
 
         if (!tookOffer) {
-            doLog(
+            llog(
                 ns,
                 "Investment round 2: Failed to generate an offer over $10t (best: %s for %d%%)",
                 ns.nFormat(bestOffer.funds, "(0.000a)"),
@@ -549,7 +523,7 @@ export async function main(ns) {
             let startSize = ns.corporation.getWarehouse(agDivName, city).size;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase a warehouse upgrade %s < %s",
                     ns.nFormat(corpFunds, "($0.000a)"),
@@ -558,7 +532,7 @@ export async function main(ns) {
             } else {
                 ns.corporation.upgradeWarehouse(agDivName, city);
                 let endSize = ns.corporation.getWarehouse(agDivName, city).size;
-                doLog(
+                llog(
                     ns,
                     "Upgraded %s %s's warehouse size from %s to %s for %s",
                     agDivName,
@@ -581,7 +555,7 @@ export async function main(ns) {
 
             while (ns.corporation.getMaterial(agDivName, city, "Real Estate").qty < 230000) await ns.sleep(5);
 
-            doLog(ns, "Purchased Round 3 of %s production materials in %s", agDivName, city);
+            llog(ns, "Purchased Round 3 of %s production materials in %s", agDivName, city);
 
             ns.corporation.buyMaterial(agDivName, city, "Hardware", 0);
             ns.corporation.buyMaterial(agDivName, city, "Robots", 0);
@@ -593,7 +567,7 @@ export async function main(ns) {
     // open the Tobacco division
     if (ns.corporation.getCorporation().divisions.find((div) => div.type === tbDivName) === undefined) {
         let divCost = ns.corporation.getExpandIndustryCost(tbDivName);
-        doLog(ns, "Starting %s division for %s", tbDivName, ns.nFormat(divCost, "($0.000a)"));
+        llog(ns, "Starting %s division for %s", tbDivName, ns.nFormat(divCost, "($0.000a)"));
 
         ns.corporation.expandIndustry(tbDivName, tbDivName);
     }
@@ -604,7 +578,7 @@ export async function main(ns) {
         let corpFunds = ns.corporation.getCorporation().funds;
 
         if (corpFunds < expandCost) {
-            doLog(
+            llog(
                 ns,
                 "ERROR: Insufficient funds to expand %s to %s %s < %s",
                 tbDivName,
@@ -615,7 +589,7 @@ export async function main(ns) {
 
             return;
         } else {
-            doLog(ns, "Expanding %s to %s for %s", tbDivName, city, ns.nFormat(expandCost, "($0.000a)"));
+            llog(ns, "Expanding %s to %s for %s", tbDivName, city, ns.nFormat(expandCost, "($0.000a)"));
             ns.corporation.expandCity(tbDivName, city);
         }
     }
@@ -627,7 +601,7 @@ export async function main(ns) {
             let corpFunds = ns.corporation.getCorporation().funds;
 
             if (warehouseCost <= corpFunds) {
-                doLog(
+                llog(
                     ns,
                     "Purchasing a %s warehouse in %s for %s",
                     tbDivName,
@@ -636,7 +610,7 @@ export async function main(ns) {
                 );
                 ns.corporation.purchaseWarehouse(tbDivName, city);
             } else {
-                doLog(
+                llog(
                     ns,
                     "Insufficient funds to purchase a %s warehouse in %s %s < %s",
                     tbDivName,
@@ -655,7 +629,7 @@ export async function main(ns) {
             let startSize = ns.corporation.getWarehouse(tbDivName, city).size;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase a warehouse upgrade %s < %s",
                     ns.nFormat(corpFunds, "($0.000a)"),
@@ -664,7 +638,7 @@ export async function main(ns) {
             } else {
                 ns.corporation.upgradeWarehouse(tbDivName, city);
                 let endSize = ns.corporation.getWarehouse(tbDivName, city).size;
-                doLog(
+                llog(
                     ns,
                     "Upgraded %s %s's warehouse size from %s to %s for %s",
                     tbDivName,
@@ -693,7 +667,7 @@ export async function main(ns) {
         let corpFunds = ns.corporation.getCorporation().funds;
 
         if (corpFunds < upgradeCost) {
-            doLog(
+            llog(
                 ns,
                 "ERROR: Insufficient funds to increase %s %s office size to 10 %s < %s",
                 tbDivName,
@@ -703,7 +677,7 @@ export async function main(ns) {
             );
             return;
         } else {
-            doLog(
+            llog(
                 ns,
                 "Purchasing %d additional office positions in %s %s for %s",
                 10 - ns.corporation.getOffice(tbDivName, city).size,
@@ -736,7 +710,7 @@ export async function main(ns) {
         let corpFunds = ns.corporation.getCorporation().funds;
 
         if (corpFunds < upgradeCost) {
-            doLog(
+            llog(
                 ns,
                 "ERROR: Insufficient funds to increase %s %s office size to 30 %s < %s",
                 tbDivName,
@@ -746,7 +720,7 @@ export async function main(ns) {
             );
             return;
         } else {
-            doLog(
+            llog(
                 ns,
                 "Purchasing %d additional office positions in %s %s for %s",
                 30 - ns.corporation.getOffice(tbDivName, tbRDCity).size,
@@ -787,7 +761,7 @@ export async function main(ns) {
             let corpFunds = ns.corporation.getCorporation().funds;
 
             if (corpFunds < upgradeCost) {
-                doLog(
+                llog(
                     ns,
                     "WARNING: Insufficient funds to purchase %s %s < %s",
                     upgrade,
@@ -796,7 +770,7 @@ export async function main(ns) {
                 );
                 break;
             } else {
-                doLog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
+                llog(ns, "Purchasing %s upgrade for %s", upgrade, ns.nFormat(upgradeCost, "($0.000a)"));
                 ns.corporation.levelUpgrade(upgrade);
             }
         }
@@ -832,14 +806,14 @@ export async function main(ns) {
         }
 
         if (doUpdate && !didUpdate) {
-            //doLog(ns, "Doing Update");
+            //llog(ns, "Doing Update");
 
             didUpdate = true;
 
             // Attempt to max out Wilson Analytics
             while (ns.corporation.getUpgradeLevelCost("Wilson Analytics") < ns.corporation.getCorporation().funds * 0.5) {
                 let upgradeCost = ns.corporation.getUpgradeLevelCost("Wilson Analytics");
-                doLog(ns, "Purchasing %s upgrade for %s", "Wilson Analytics", ns.nFormat(upgradeCost, "($0.000a)"));
+                llog(ns, "Purchasing %s upgrade for %s", "Wilson Analytics", ns.nFormat(upgradeCost, "($0.000a)"));
                 ns.corporation.levelUpgrade("Wilson Analytics");
             }
 
@@ -864,7 +838,7 @@ export async function main(ns) {
             // if there are no products in development, discontinue the oldest one if needed
             if (!productIsDeveloping) {
                 if (products.length === maxProducts) {
-                    doLog(ns, "Discontinuing %s product %s", tbDivName, products[0].name);
+                    llog(ns, "Discontinuing %s product %s", tbDivName, products[0].name);
 
                     ns.corporation.discontinueProduct(tbDivName, products[0].name);
                 }
@@ -881,7 +855,7 @@ export async function main(ns) {
                     newMult = Number(products[products.length - 2].sCost.slice(3));
                 }
 
-                doLog(
+                llog(
                     ns,
                     "Developing new %s product %s for %s",
                     tbDivName,
@@ -918,7 +892,7 @@ export async function main(ns) {
                     let oldmpMult = mpMult;
                     mpMult = Math.max(Math.floor(mpMult * 0.975), 1);
 
-                    doLog(ns, "Reducing %s mpMult %d => %d", product.name, oldmpMult, mpMult);
+                    llog(ns, "Reducing %s mpMult %d => %d", product.name, oldmpMult, mpMult);
                     ns.corporation.sellProduct(
                         tbDivName,
                         tbRDCity,
@@ -932,7 +906,7 @@ export async function main(ns) {
 
                     mpMult = Math.ceil(mpMult * 1.1);
 
-                    doLog(ns, "Increasing %s mpMult %d => %d", product.name, oldmpMult, mpMult);
+                    llog(ns, "Increasing %s mpMult %d => %d", product.name, oldmpMult, mpMult);
                     ns.corporation.sellProduct(
                         tbDivName,
                         tbRDCity,
@@ -989,7 +963,7 @@ export async function main(ns) {
             }
 
             if (advertIncrease > 0) {
-                doLog(
+                llog(
                     ns,
                     "Hiring %s AdVert %dx for %s",
                     tbDivName,
@@ -999,7 +973,7 @@ export async function main(ns) {
             }
 
             if (officeSizeIncrease > 0) {
-                doLog(
+                llog(
                     ns,
                     "Hiring %d employees in %s:%s for %s",
                     officeSizeIncrease,
@@ -1053,7 +1027,7 @@ export async function main(ns) {
             }
 
             for (const [city, val] of Object.entries(cityIncrease)) {
-                doLog(
+                llog(
                     ns,
                     "Hiring %d employees in %s:%s for %s",
                     val.inc,
@@ -1096,7 +1070,7 @@ export async function main(ns) {
                 }
 
                 if (upgradeCount > 0) {
-                    doLog(
+                    llog(
                         ns,
                         "Purchased %dx %s upgrade for %s",
                         upgradeCount,
@@ -1127,7 +1101,7 @@ export async function main(ns) {
                     ns.corporation.getExpandIndustryCost(division) < ns.corporation.getCorporation().funds
                 ) {
                     let divCost = ns.corporation.getExpandIndustryCost(division);
-                    doLog(ns, "Starting %s division for %s", division, ns.nFormat(divCost, "($0.000a)"));
+                    llog(ns, "Starting %s division for %s", division, ns.nFormat(divCost, "($0.000a)"));
 
                     ns.corporation.expandIndustry(division, division);
                 }
@@ -1141,7 +1115,7 @@ export async function main(ns) {
                 offer.funds > 1000000000000000
             ) {
                 ns.corporation.acceptInvestmentOffer();
-                doLog(
+                llog(
                     ns,
                     "Investment round 3: Taking offer of %s for %d%%",
                     ns.nFormat(offer.funds, "(0.000a)"),
@@ -1172,36 +1146,38 @@ export async function main(ns) {
                 "uPgrade: Capacity.I",
                 "uPgrade: Capacity.II",
             ];
+
+            // buy one time unlocks government partnership and shady accounting after going public
         }
 
         await ns.sleep(20);
     }
 
-    doLog(ns, "**** DONE ****");
+    llog(ns, "**** DONE ****");
     return;
 
     for (const div of corp.divisions) {
-        doLog(ns, "%s: %s - %s", corp.name, div.name, div.type);
+        llog(ns, "%s: %s - %s", corp.name, div.name, div.type);
         const products = div.products.map((prodname) => ns.corporation.getProduct(div.name, prodname));
 
         for (const product of products) {
             const marketFactor = Math.max(0.1, (product.dmd * (100 - product.cmp)) / 100);
-            doLog(ns, "  %s:", product.name);
-            //doLog(ns, "      Development Progress: %s", product.developmentProgress)
-            doLog(ns, "      Market Price: %s", ns.nFormat(product.pCost, "($0.000a)"));
-            doLog(
+            llog(ns, "  %s:", product.name);
+            //llog(ns, "      Development Progress: %s", product.developmentProgress)
+            llog(ns, "      Market Price: %s", ns.nFormat(product.pCost, "($0.000a)"));
+            llog(
                 ns,
                 "      Sell Cost: %s",
                 typeof product.sCost === "string" ? product.sCost : ns.nFormat(product.sCost, "($0.000a)")
             );
-            doLog(ns, "      Competition: %.2f", product.cmp);
-            doLog(ns, "      Demand: %.2f", product.dmd);
-            doLog(ns, "      Market Factor: %.2f", marketFactor);
+            llog(ns, "      Competition: %.2f", product.cmp);
+            llog(ns, "      Demand: %.2f", product.dmd);
+            llog(ns, "      Market Factor: %.2f", marketFactor);
 
             let mult = 32;
             for (const [key, [qty, prod, sell]] of Object.entries(product.cityData)) {
                 const prodDeficit = prod + 0.00000001 - sell;
-                doLog(
+                llog(
                     ns,
                     "        %10s: qty: %-6.2f prod: %-6.2f sell: %-6.2f diff: %-6.2f",
                     key,

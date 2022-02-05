@@ -1,25 +1,4 @@
 /** @param {import(".").NS } ns */
-function stFormat(ns, ms, showms = true, showfull = false) {
-    let timeLeft = ms;
-    let hours = Math.floor(ms / (1000 * 60 * 60));
-    timeLeft -= hours * (1000 * 60 * 60);
-    let minutes = Math.floor(timeLeft / (1000 * 60));
-    timeLeft -= minutes * (1000 * 60);
-    let seconds = Math.floor(timeLeft / 1000);
-    timeLeft -= seconds * 1000;
-    let milliseconds = timeLeft;
-
-    if (showms) {
-        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds);
-        if (minutes > 0) return ns.sprintf("%02d:%02d.%03d", minutes, seconds, milliseconds);
-        return ns.sprintf("%02d.%03d", seconds, milliseconds);
-    } else {
-        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d", hours, minutes, seconds);
-        if (minutes > 0) return ns.sprintf("%02d:%02d", minutes, seconds);
-        return ns.sprintf("%02d", seconds);
-    }
-}
-
 export async function main(ns) {
     ns.disableLog("sleep");
 
@@ -43,13 +22,28 @@ export async function main(ns) {
     //     ns.tprintf("%16s  %9s %5s %9s/s", crimeStats.name, ns.nFormat(crimeStats.money, "($0.000a)"), stFormat(ns, crimeStats.time, false), ns.nFormat(crimeStats.money / (crimeStats.time / 1000), "($0.000a)"));
     // }
 
-    while (true) {// (!ns.getPlayer().factions.includes("NiteSec")) {
-        await ns.sleep(ns.commitCrime("mug") + 200);
+    let dynamic = true;
+    let crime = "shoplift";
+    if (ns.args[0]) {
+        crime = ns.args[0];
+        dynamic = false
+    }
 
-        let allFactions = ns.getPlayer().factions.concat(ns.checkFactionInvitations());
-        if (allFactions.includes("NiteSec")) {
-            ns.joinFaction("NiteSec")
+    while (true) {
+        if (dynamic) {
+            if (ns.getCrimeChance("mug") > .7)
+                crime = "mug"
+            if (ns.getCrimeChance("homicide") > .7)
+                crime = "homicide"
         }
+
+        // (!ns.getPlayer().factions.includes("NiteSec")) {
+        await ns.sleep(ns.commitCrime(crime) + 200);
+
+        // let allFactions = ns.getPlayer().factions.concat(ns.checkFactionInvitations());
+        // if (allFactions.includes("NiteSec")) {
+        //     ns.joinFaction("NiteSec")
+        // }
     }
 
     ns.workForFaction("NiteSec", "Field Work");

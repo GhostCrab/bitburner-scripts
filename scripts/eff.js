@@ -1,4 +1,4 @@
-import { allHosts, serverIsHackable, setns, softenServer, doProgramBuys, canExecuteOnServer } from "./util.js";
+import { allHosts, serverIsHackable, softenServer, doProgramBuys, canExecuteOnServer } from "./util.js";
 import { SuperHackEnv } from "./super_hack_env.js";
 
 /** @param {import("./index.d").NS } ns */
@@ -39,8 +39,8 @@ async function getOrderedTargetArr(ns, _host, simMinutes) {
 
     let ramAllowance = getRamAllowance(ns, host);
     let hackRates = [];
-    let targetnames = allHosts()
-        .filter(serverIsHackable)
+    let targetnames = allHosts(ns)
+        .filter(serverIsHackable.bind(null, ns))
         .filter((hostname) => ns.getServerMaxMoney(hostname) > 0);
     for (let targetname of targetnames) {
         hackRates.push([targetname, await calcHackRate(ns, host.hostname, targetname, simMinutes)]);
@@ -51,23 +51,21 @@ async function getOrderedTargetArr(ns, _host, simMinutes) {
 
 /** @param {import("./index.d").NS } ns */
 export async function main(ns) {
-    setns(ns);
-
-    let allHostnames = allHosts();
+    let allHostnames = allHosts(ns);
     let attackScript = "super_hack_adv.js";
     let attackLib = "super_hack_env.js";
 
-    doProgramBuys();
+    doProgramBuys(ns);
 
     // soften all servers
     for (const hostName of allHostnames) {
-        softenServer(hostName);
+        softenServer(ns, hostName);
     }
 
     // create a dictionary mapping server size to server name array (with a special bucket for "home")
     let hostSizeDict = {};
     for (let hostname of allHostnames
-        .filter(canExecuteOnServer)
+        .filter(canExecuteOnServer.bind(null, ns))
         .filter((hostname) => ns.getServerMaxRam(hostname) >= 32)) {
         let key = ns.getServerMaxRam(hostname);
 

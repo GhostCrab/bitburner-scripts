@@ -28,15 +28,16 @@ export async function main(_ns) {
     let othernames = filenames.filter(isOther);
 
     let maxFileLength = 0;
-    filenames.map(function (name) {
-        if (name.length > maxFileLength) maxFileLength = name.length;
+    scriptnames.map(function (name) {
+        let len = name.length + 2
+        if (len > maxFileLength) maxFileLength = len;
     });
 
     if (scriptnames.length) {
         ns.tprintf("======== SCRIPTS ========");
         for (const filename of scriptnames)
             ns.tprintf(
-                `  %-${maxFileLength}s [RAM: %5.2fGB] %s`,
+                `  %-${maxFileLength}s %7.2fGB %s`,
                 filename,
                 ns.getScriptRam(filename, hostname),
                 ns.scriptRunning(filename, hostname) ? "RUNNING" : ""

@@ -1,9 +1,8 @@
-import { setns, allHosts } from "./util.js";
+import { allHosts } from "./util.js";
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    setns(ns);
-    for (let hostname of allHosts()) {
+    for (let hostname of allHosts(ns)) {
         if (hostname === "home") continue;
         ns.killall(hostname);
     }
@@ -15,7 +14,8 @@ export async function main(ns) {
             ps.filename === "leech.js" ||
             ps.filename === "hacknet.js" ||
             ps.filename === "hacking_gang.js" ||
-			ps.filename === "corp.js"
+			ps.filename === "corp.js" ||
+            ps.filename === "cct.js"
         )
             continue;
         ns.kill(ps.pid);

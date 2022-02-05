@@ -1,4 +1,4 @@
-import { setns, cleanLogs } from "./util.js";
+import { cleanLogs, stFormat } from "./util.js";
 
 export const HSUpgradeType = {
     LEVEL: "level",
@@ -133,27 +133,6 @@ class HSUpgrade {
     }
 }
 
-function stFormat(ns, ms, showms = false, showfull = false) {
-    let timeLeft = ms;
-    let hours = Math.floor(ms / (1000 * 60 * 60));
-    timeLeft -= hours * (1000 * 60 * 60);
-    let minutes = Math.floor(timeLeft / (1000 * 60));
-    timeLeft -= minutes * (1000 * 60);
-    let seconds = Math.floor(timeLeft / 1000);
-    timeLeft -= seconds * 1000;
-    let milliseconds = timeLeft;
-
-    if (showms) {
-        if (hours > 0 || showfull) return ns.sprintf("%dh%02dm%02d.%03ds", hours, minutes, seconds, milliseconds);
-        if (minutes > 0) return ns.sprintf("%dm%02d.%03ds", minutes, seconds, milliseconds);
-        return ns.sprintf("%d.%03ds", seconds, milliseconds);
-    } else {
-        if (hours > 0 || showfull) return ns.sprintf("%dh%02dm%02ds", hours, minutes, seconds);
-        if (minutes > 0) return ns.sprintf("%dm%02ds", minutes, seconds);
-        return ns.sprintf("%ds", seconds);
-    }
-}
-
 function generateNewServerValue(ns) {
     let stats = {
         ...ns.hacknet.getNodeStats(0),
@@ -230,8 +209,7 @@ function generateNewServerValue(ns) {
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    setns(ns);
-    cleanLogs();
+    cleanLogs(ns);
 
     let prodCalc = 0;
     for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
@@ -345,6 +323,37 @@ export async function main(ns) {
                     ns.hacknet.spendHashes("Sell for Money");
 
                 await ns.sleep(1000);
+
+                // let studyCost = ns.hacknet.hashCost("Generate Coding Contract");
+
+                // while (ns.hacknet.hashCapacity() < studyCost) {
+                //     while (ns.hacknet.numHashes() > ns.hacknet.hashCost("Sell for Money"))
+                //         ns.hacknet.spendHashes("Sell for Money");
+        
+                //     // find the cheapest cache upgrade and attempt to buy it
+                //     let targetIdx = -1;
+                //     let targetIdxCost = Number.MAX_SAFE_INTEGER;
+                //     for (let idx = 0; idx < ns.hacknet.numNodes(); idx++) {
+                //         let idxCost = ns.hacknet.getCacheUpgradeCost(idx, 1);
+                //         if (idxCost < targetIdxCost) {
+                //             targetIdx = idx;
+                //             targetIdxCost = idxCost;
+                //         }
+                //     }
+        
+                //     if (ns.getPlayer().money > targetIdxCost) {
+                //         ns.hacknet.upgradeCache(targetIdx, 1);
+                //         continue;
+                //     }
+        
+                //     await ns.sleep(1000);
+                // }
+        
+                // while (ns.hacknet.numHashes() < studyCost) await ns.sleep(1000);
+        
+                // ns.hacknet.spendHashes("Generate Coding Contract");
+        
+                // await ns.sleep(1000);
             }
 
             hashServerUpgrades[0].buy(ns);

@@ -1,51 +1,18 @@
-import { setns, mapHosts, doBuyAndSoftenAll } from "./util.js";
+import { doBuyAndSoftenAll, doBackdoors, ALL_FACTIONS, stFormat } from "./util.js";
 
 function printAugStats(ns, stats) {
-    if (stats.agility_exp_mult) ns.tprintf("    %31s: %.2f", "agility_exp_mult", stats.agility_exp_mult);
-    if (stats.agility_mult) ns.tprintf("    %31s: %.2f", "agility_mult", stats.agility_mult);
-    if (stats.bladeburner_analysis_mult)
-        ns.tprintf("    %31s: %.2f", "bladeburner_analysis_mult", stats.bladeburner_analysis_mult);
-    if (stats.bladeburner_max_stamina_mult)
-        ns.tprintf("    %31s: %.2f", "bladeburner_max_stamina_mult", stats.bladeburner_max_stamina_mult);
-    if (stats.bladeburner_stamina_gain_mult)
-        ns.tprintf("    %31s: %.2f", "bladeburner_stamina_gain_mult", stats.bladeburner_stamina_gain_mult);
-    if (stats.bladeburner_success_chance_mult)
-        ns.tprintf("    %31s: %.2f", "bladeburner_success_chance_mult", stats.bladeburner_success_chance_mult);
-    if (stats.charisma_exp_mult) ns.tprintf("    %31s: %.2f", "charisma_exp_mult", stats.charisma_exp_mult);
-    if (stats.charisma_mult) ns.tprintf("    %31s: %.2f", "charisma_mult", stats.charisma_mult);
-    if (stats.company_rep_mult) ns.tprintf("    %31s: %.2f", "company_rep_mult", stats.company_rep_mult);
-    if (stats.crime_money_mult) ns.tprintf("    %31s: %.2f", "crime_money_mult", stats.crime_money_mult);
-    if (stats.crime_success_mult) ns.tprintf("    %31s: %.2f", "crime_success_mult", stats.crime_success_mult);
-    if (stats.defense_exp_mult) ns.tprintf("    %31s: %.2f", "defense_exp_mult", stats.defense_exp_mult);
-    if (stats.defense_mult) ns.tprintf("    %31s: %.2f", "defense_mult", stats.defense_mult);
-    if (stats.dexterity_exp_mult) ns.tprintf("    %31s: %.2f", "dexterity_exp_mult", stats.dexterity_exp_mult);
-    if (stats.dexterity_mult) ns.tprintf("    %31s: %.2f", "dexterity_mult", stats.dexterity_mult);
-    if (stats.faction_rep_mult) ns.tprintf("    %31s: %.2f", "faction_rep_mult", stats.faction_rep_mult);
-    if (stats.hacking_chance_mult) ns.tprintf("    %31s: %.2f", "hacking_chance_mult", stats.hacking_chance_mult);
-    if (stats.hacking_exp_mult) ns.tprintf("    %31s: %.2f", "hacking_exp_mult", stats.hacking_exp_mult);
-    if (stats.hacking_grow_mult) ns.tprintf("    %31s: %.2f", "hacking_grow_mult", stats.hacking_grow_mult);
-    if (stats.hacking_money_mult) ns.tprintf("    %31s: %.2f", "hacking_money_mult", stats.hacking_money_mult);
-    if (stats.hacking_mult) ns.tprintf("    %31s: %.2f", "hacking_mult", stats.hacking_mult);
-    if (stats.hacking_speed_mult) ns.tprintf("    %31s: %.2f", "hacking_speed_mult", stats.hacking_speed_mult);
-    if (stats.hacknet_node_core_cost_mult)
-        ns.tprintf("    %31s: %.2f", "hacknet_node_core_cost_mult", stats.hacknet_node_core_cost_mult);
-    if (stats.hacknet_node_level_cost_mult)
-        ns.tprintf("    %31s: %.2f", "hacknet_node_level_cost_mult", stats.hacknet_node_level_cost_mult);
-    if (stats.hacknet_node_money_mult)
-        ns.tprintf("    %31s: %.2f", "hacknet_node_money_mult", stats.hacknet_node_money_mult);
-    if (stats.hacknet_node_purchase_cost_mult)
-        ns.tprintf("    %31s: %.2f", "hacknet_node_purchase_cost_mult", stats.hacknet_node_purchase_cost_mult);
-    if (stats.hacknet_node_ram_cost_mult)
-        ns.tprintf("    %31s: %.2f", "hacknet_node_ram_cost_mult", stats.hacknet_node_ram_cost_mult);
-    if (stats.strength_exp_mult) ns.tprintf("    %31s: %.2f", "strength_exp_mult", stats.strength_exp_mult);
-    if (stats.strength_mult) ns.tprintf("    %31s: %.2f", "strength_mult", stats.strength_mult);
-    if (stats.work_money_mult) ns.tprintf("    %31s: %.2f", "work_money_mult", stats.work_money_mult);
+    for (const [key, val] of Object.entries(stats)) {
+        ns.tprintf("%30s %s", key, val);
+    }
 }
 
 class Augmentation {
     constructor(ns, name, faction) {
         let ownedAugs = ns.getOwnedAugmentations(true);
         let installedAugs = ns.getOwnedAugmentations();
+        let factionRep =
+            (ns.getPlayer().currentWorkFactionName === faction ? ns.getPlayer().workRepGained : 0) +
+            ns.getFactionRep(faction);
         this.name = name;
         this.faction = faction;
         this.price = ns.getAugmentationPrice(this.name);
@@ -54,7 +21,7 @@ class Augmentation {
         this.stats = ns.getAugmentationStats(this.name);
         this.owned = ownedAugs.includes(this.name);
         this.installed = installedAugs.includes(this.name);
-        this.purchaseable = ns.getFactionRep(faction) >= this.rep;
+        this.purchaseable = factionRep >= this.rep;
         let dep = ns.getAugmentationPrereq(this.name)[0];
         if (dep !== undefined && (ownedAugs.includes(dep) || installedAugs.includes(dep))) dep = undefined;
         this.dep = dep;
@@ -65,10 +32,19 @@ class Augmentation {
             : this.purchaseable
             ? "PURCHASEABLE"
             : "";
-        this.str = `${this.faction}: ${this.name} - ${ns.nFormat(this.price, "$0.000a")} [${ns.nFormat(
-            this.rep,
-            "0.000a"
-        )}] ${installedStr}`;
+
+        if (ns.getPlayer().currentWorkFactionName === faction && installedStr === "") {
+            let repGainPerMs = (ns.getPlayer().workRepGainRate * 5) / 1000;
+            installedStr = stFormat(ns, (this.rep - factionRep) / repGainPerMs);
+        }
+        this.str = ns.sprintf(
+            "%s: %s - %s [%s] %s",
+            this.faction,
+            this.name,
+            ns.nFormat(this.price, "$0.000a"),
+            ns.nFormat(this.rep, "0.000a"),
+            installedStr
+        );
     }
 
     toString() {
@@ -104,89 +80,25 @@ class Augmentation {
     }
 }
 
-async function doBackdoors(ns) {
-    //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n", "b-and-a", "ecorp", "fulcrumassets", "fulcrumtech"];
-    const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "w0r1d_d43m0n"];
-    //const targetHosts = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", ".", "omnitek", "kuai-gong", "megacorp"];
-    let hosts = mapHosts();
-
-    for (const [hostName, trail] of Object.entries(hosts)) {
-        let server = ns.getServer(hostName);
-        if (
-            !targetHosts.includes(hostName) ||
-            server.backdoorInstalled ||
-            server.requiredHackingSkill > ns.getHackingLevel() ||
-            !server.hasAdminRights
-        )
-            continue;
-
-        ns.print(hostName);
-        for (const hostHopName of trail) {
-            ns.connect(hostHopName);
-        }
-
-        await ns.installBackdoor();
-        ns.connect("home");
-    }
-}
-
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    setns(ns);
-
-    doBuyAndSoftenAll();
+    doBuyAndSoftenAll(ns);
     await doBackdoors(ns);
 
     let player = ns.getPlayer();
-    let incomePerSec = player.money / (player.playtimeSinceLastAug / 1000);
-
-    ns.tprintf(`Income: ${ns.nFormat(incomePerSec, "$0.000a")}/s`);
-
-    let allFactions = [
-        "Illuminati",
-        "Daedalus",
-        "The Covenant",
-        "ECorp",
-        "MegaCorp",
-        "Bachman & Associates",
-        "Blade Industries",
-        "NWO",
-        "Clarke Incorporated",
-        "OmniTek Incorporated",
-        "Four Sigma",
-        "KuaiGong International",
-        "Fulcrum Secret Technologies",
-        "BitRunners",
-        "The Black Hand",
-        "NiteSec",
-        "Aevum",
-        "Chongqing",
-        "Ishima",
-        "New Tokyo",
-        "Sector-12",
-        "Volhaven",
-        "Speakers for the Dead",
-        "The Dark Army",
-        "The Syndicate",
-        "Silhouette",
-        "Tetrads",
-        "Slum Snakes",
-        "Netburners",
-        "Tian Di Hui",
-        "CyberSec",
-        // "Bladeburners",
-        // "Church of the Machine God"
-    ];
 
     let checkFactions = player.factions.concat(ns.checkFactionInvitations());
-    let sortedFactions = checkFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
-    //let sortedFactions = allFactions.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
+    let sortedFactions = checkFactions.sort(
+        (a, b) =>
+            (ns.getPlayer().currentWorkFactionName === b ? ns.getPlayer().workRepGained : 0) +
+            ns.getFactionRep(b) -
+            ((ns.getPlayer().currentWorkFactionName === a ? ns.getPlayer().workRepGained : 0) + ns.getFactionRep(a))
+    );
+    //let sortedFactions = ALL_FACTIONS.sort((a, b) => ns.getFactionRep(b) - ns.getFactionRep(a));
 
     let allPurchaseableAugs = [];
     let topFaction = true;
-    for (let faction of sortedFactions) {
-        //for (let faction of allFactions) {
-        if (faction === "Bladeburners") continue;
+    for (const faction of sortedFactions) {
         let augs = ns
             .getAugmentationsFromFaction(faction)
             .map((name) => {
@@ -205,7 +117,12 @@ export async function main(ns) {
 
         if (augsToBuy.length === 0 && !topFaction) continue;
 
-        ns.tprintf("%s (rep: %d):", faction, ns.getFactionRep(faction));
+        ns.tprintf(
+            "%s (rep: %d):",
+            faction,
+            (ns.getPlayer().currentWorkFactionName === faction ? ns.getPlayer().workRepGained : 0) +
+                ns.getFactionRep(faction)
+        );
         for (let aug of augsToBuy) {
             ns.tprintf("  %s", aug);
             // printAugStats(aug.stats);
@@ -271,27 +188,34 @@ export async function main(ns) {
         if (!didDepMove) break;
     }
 
-    if (allPurchaseableAugs.length > 0) {
-        ns.tprintf("============================");
-        let mult = 1;
-        let total = 0;
-        for (let aug of allPurchaseableAugs) {
-            //if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
-            ns.tprintf(
-                "%40s - %9s %s",
-                aug.name,
-                ns.nFormat(aug.price * mult, "$0.000a"),
-                aug.dep !== undefined ? aug.dep : ""
-            );
-            total += aug.price * mult;
-            mult *= 1.9;
-        }
-        ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
-    }
+    // if (allPurchaseableAugs.length > 0) {
+    //     ns.tprintf("============================");
+    //     let mult = 1;
+    //     let total = 0;
+    //     for (let aug of allPurchaseableAugs) {
+    //         //if (ns.args[0]) ns.purchaseAugmentation(aug.faction, aug.name);
+    //         ns.tprintf(
+    //             "%40s - %9s %s",
+    //             aug.name,
+    //             ns.nFormat(aug.price * mult, "$0.000a"),
+    //             aug.dep !== undefined ? aug.dep : ""
+    //         );
+    //         total += aug.price * mult;
+    //         mult *= 1.9;
+    //     }
+    //     ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
+    // }
 
-    if (allPurchaseableAugs.length > 0) {
+        let buysafe = ns.getPlayer().currentWorkFactionName !== sortedFactions[0];
+        if (!buysafe && ns.args[0]) {
+            ns.tprintf("WARNING: Unable to buy augmentations when actively working for the top faction");
+        }
+
         ns.tprintf("============================");
         let mult = 1;
+        let srcFile11 = ns.getOwnedSourceFiles().find((x) => x.n === 11);
+        let srcFile11Lvl = srcFile11 ? srcFile11.lvl : 0;
+        let multmult = 1.9 * [1, 0.96, 0.94, 0.93][srcFile11Lvl];
         let total = Number.MAX_SAFE_INTEGER;
         let startAug = 0;
         let purchaseableAugs = allPurchaseableAugs.filter((a) => a.name !== "The Red Pill");
@@ -300,7 +224,7 @@ export async function main(ns) {
             mult = 1;
             for (let augIdx = startAug; augIdx < purchaseableAugs.length; augIdx++) {
                 total += purchaseableAugs[augIdx].price * mult;
-                mult *= 1.9;
+                mult *= multmult;
             }
 
             if (total < ns.getPlayer().money) break;
@@ -308,25 +232,67 @@ export async function main(ns) {
             startAug++;
         }
 
-        if (startAug === purchaseableAugs.length) {
-            ns.tprintf("All augs too expensive");
-            return;
-        }
-
         total = 0;
         mult = 1;
-        for (let augIdx = startAug; augIdx < purchaseableAugs.length; augIdx++) {
-            if (ns.args[0]) ns.purchaseAugmentation(purchaseableAugs[augIdx].faction, purchaseableAugs[augIdx].name);
+        let startmoney = ns.getPlayer().money
+        for (const aug of purchaseableAugs.slice(startAug)) {
+            if (ns.args[0] && buysafe) ns.purchaseAugmentation(aug.faction, aug.name);
             ns.tprintf(
-                "%40s - %9s %s",
-                purchaseableAugs[augIdx].name,
-                ns.nFormat(purchaseableAugs[augIdx].price * mult, "$0.000a"),
-                purchaseableAugs[augIdx].dep !== undefined ? purchaseableAugs[augIdx].dep : ""
+                "%50s - %9s %s",
+                aug.name,
+                ns.nFormat(aug.price * mult, "$0.000a"),
+                aug.dep !== undefined ? aug.dep : ""
             );
-            total += purchaseableAugs[augIdx].price * mult;
-            mult *= 1.9;
+            total += aug.price * mult;
+            mult *= multmult;
         }
 
-        ns.tprintf("\n%40s - %9s", "Total", ns.nFormat(total, "$0.000a"));
-    }
+        // see how many Neuroflux Governors we can buy
+        let topFactionRep =
+            (ns.getPlayer().currentWorkFactionName === sortedFactions[0] ? ns.getPlayer().workRepGained : 0) +
+            ns.getFactionRep(sortedFactions[0]);
+        let ngPrice = ns.getAugmentationPrice("NeuroFlux Governor") * ((ns.args[0] && buysafe) ? 1 : mult);
+        let ngRepReq = ns.getAugmentationRepReq("NeuroFlux Governor");
+        let nfCount = 1;
+        while (true) {
+            if (total + ngPrice < startmoney && ngRepReq <= topFactionRep) {
+                if (ns.args[0] && buysafe) {
+                    let result = ns.purchaseAugmentation(sortedFactions[0], "NeuroFlux Governor");
+                    if (!result)
+                        ns.tprintf("ERROR, could not buy Neuroflux governor")
+                }
+                ns.tprintf(
+                    "%50s - %9s %s",
+                    "NeuroFlux Governor +" + nfCount.toString(),
+                    ns.nFormat(ngPrice, "$0.000a"),
+                    ns.nFormat(ngRepReq, "0.000a")
+                );
+                nfCount++;
+                total += ngPrice;
+                ngPrice = ngPrice * 1.14 * multmult;
+                ngRepReq *= 1.14;
+            } else {
+                break;
+            }
+        }
+
+        ns.tprintf("\n%50s - %9s", "Total", ns.nFormat(total, "$0.000a"));
 }
+
+
+
+/*
+NeuroFlux Governor +1 -   $1.111m 740.772 4
+NeuroFlux Governor +2 -   $2.238m 844.480 5  --  $2.407m Requires 844.480 faction reputation
+NeuroFlux Governor +3 -   $4.509m 962.707 6  --  $5.213m Requires 962.707 faction reputation
+NeuroFlux Governor +4 -   $9.082m 1.097k  7  --  $11.291m Requires 1.097k faction reputation
+NeuroFlux Governor +5 -  $18.295m 1.251k  8  --  $24.457m Requires 1.251k faction reputation
+NeuroFlux Governor +6 -  $36.854m 1.426k  9  --  $52.975m Requires 1.426k faction reputation
+NeuroFlux Governor +7 -  $74.238m 1.626k  10 --  $114.743m Requires 1.626k faction reputation
+NeuroFlux Governor +8 - $149.543m 1.854k  11 --  $248.534m Requires 1.854k faction reputation
+NeuroFlux Governor +9 - $301.236m 2.113k  12 --  $538.324m Requires 2.113k faction reputation
+NeuroFlux Governor +10 - $606.804m 2.409k 13 --  $1.166b Requires 2.409k faction reputation
+NeuroFlux Governor +11 -   $1.222b 2.746k 14 --  $2.526b Requires 2.746k faction reputation
+NeuroFlux Governor +12 -   $2.462b 3.131k 15 --  $5.470b Requires 3.131k faction reputation
+NeuroFlux Governor +13 -   $4.960b 3.569k 16 --  $11.849b Requires 3.569k faction reputation
+*/

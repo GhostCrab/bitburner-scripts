@@ -1,40 +1,9 @@
-export const debug = false;
+import { stFormat, stdFormat } from "./util.js";
+
 export const TSPACER = 400;
 export const WEAKENNS = "weaken.js";
 export const GROWNS = "grow.js";
 export const HACKNS = "hack.js";
-
-function stFormat(ns, ms, showms = true, showfull = false) {
-    let timeLeft = ms;
-    let hours = Math.floor(ms / (1000 * 60 * 60));
-    timeLeft -= hours * (1000 * 60 * 60);
-    let minutes = Math.floor(timeLeft / (1000 * 60));
-    timeLeft -= minutes * (1000 * 60);
-    let seconds = Math.floor(timeLeft / 1000);
-    timeLeft -= seconds * 1000;
-    let milliseconds = timeLeft;
-
-    if (showms) {
-        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds);
-        if (minutes > 0) return ns.sprintf("%02d:%02d.%03d", minutes, seconds, milliseconds);
-        return ns.sprintf("%02d.%03d", seconds, milliseconds);
-    } else {
-        if (hours > 0 || showfull) return ns.sprintf("%02d:%02d:%02d", hours, minutes, seconds);
-        if (minutes > 0) return ns.sprintf("%02d:%02d", minutes, seconds);
-        return ns.sprintf("%02d", seconds);
-    }
-}
-
-function stdFormat(ns, offset = 0, showms = true) {
-    let date = new Date(new Date().getTime() + offset);
-
-    if (showms) {
-        let ms = ns.sprintf("%03d", date.getUTCMilliseconds());
-        return date.toLocaleTimeString("it-IT") + "." + ms;
-    } else {
-        return date.toLocaleTimeString("it-IT");
-    }
-}
 
 // {targetname: {hack stat, production lookup table}}
 const CYCLE_PRODUCTION_LOOKUP = {};
@@ -131,31 +100,29 @@ class Host {
         this.reservedScriptCalls = [];
     }
 
-    getReservedThreadCount() {
-        let reservedThreadCount = 0;
-        for (const scriptCall of this.reservedScriptCalls) {
-            reservedThreadCount += scriptCall.threads;
-        }
+    getReservedThreads() {
+        return this.reservedScriptCalls.reduce((a, b) => a + b.threads, 0);
+    }
 
-        return reservedThreadCount;
+    getAvailableThreads() {
+        return this.reservedScriptCalls.reduce((a, b) => a - b.threads, this.maxThreads);
     }
 
     // return # of threads successfully allocated
     tryReserveThreads(ns, script, threads, offset, length, batchId) {
-        let reservedThreadCount = this.getReservedThreadCount();
+        let allocateThreads = Math.min(this.getAvailableThreads(), threads);
 
-        if (reservedThreadCount === this.maxThreads) return 0;
+        if (allocateThreads === 0) return allocateThreads;
 
-        let newThreadCount = Math.min(this.maxThreads - reservedThreadCount, threads);
         this.reservedScriptCalls.push({
             script: script,
-            threads: newThreadCount,
+            threads: allocateThreads,
             offset: offset,
             length: length,
             batchId: batchId,
         });
 
-        return newThreadCount;
+        return allocateThreads;
     }
 
     // update max threads in case server size has changed
@@ -180,9 +147,49 @@ class Host {
     }
 }
 
+function generateHosts(ns, hostnames, threadSize) {
+    let hosts = [];
+    let maxThreads = 0;
+    if (hostnames)
+        hosts = hostnames
+            .map((x) => new Host(ns, x, threadSize))
+            .filter((x) => x.maxThreads > 0)
+            .sort((a, b) => b.maxThreads - a.maxThreads);
+
+    hosts.map((x) => (maxThreads += x.maxThreads));
+
+    // Too many threads causes problems
+    maxThreads = Math.min(1000000, maxThreads);
+
+    return [hosts, maxThreads];
+}
+
+function getMaxThreads(ns, hosts) {
+    let maxThreads = 0;
+    hosts.map((x) => (maxThreads += x.getMaxThreads(ns)));
+
+    // Too many threads causes problems
+    maxThreads = Math.min(1000000, maxThreads);
+
+    return maxThreads;
+}
+
+function reserveThreadsForExecution(ns, hosts, script, threads, offset, length, batchId) {
+    let unallocatedThreads = threads;
+    for (const host of hosts) {
+        unallocatedThreads -= host.tryReserveThreads(ns, script, unallocatedThreads, offset, length, batchId);
+        if (unallocatedThreads === 0) {
+            return true;
+        }
+    }
+
+    ns.tprintf("WARNING: Only able to allocate %d/%d %s threads", threads - unallocatedThreads, threads, script);
+    return false;
+}
+
 export class SmartHackEnv {
     /** @param {import(".").NS } ns */
-    constructor(ns, targetname, hostname) {
+    constructor(ns, targetname, hostnames) {
         this.targetname = targetname;
         this.highMoney = ns.getServerMaxMoney(this.targetname);
         this.lowMoney = ns.getServerMaxMoney(this.targetname) * 0.5;
@@ -193,9 +200,8 @@ export class SmartHackEnv {
         this.hackRam = ns.getScriptRam(HACKNS);
         this.threadSize = Math.max(this.weakenRam, this.growRam, this.hackRam);
 
-        this.host = new Host(ns, hostname, this.threadSize);
-        this.cores = ns.getServer(this.host.hostname).cores;
-        this.maxThreads = this.host.maxThreads;
+        this.cores = 1; // Simplify
+        [this.hosts, this.maxThreads] = generateHosts(ns, hostnames, this.threadSize);
 
         this.waitPID = 0;
 
@@ -236,27 +242,22 @@ export class SmartHackEnv {
         this.cycleTotal = 0;
         this.cycleBatchTime = 0; // this.cycleFullTime + this.cycleSpacer * this.cycleTotal
 
+        this.primaryStats = {
+            primaryThreadsTotal: 0,
+            primaryGrowThreads: 0,
+            primaryWeakenThreads: 0,
+        };
+
         // Simulator Info
         this.simEnabled = false;
-        this.simHost = ns.getServer(this.hostname);
         this.simTarget = ns.getServer(this.targetname);
         this.simPlayer = ns.getPlayer();
-        this.simTime = 0;
-        this.simIncome = 0;
     }
 
     async init(ns, force = false) {
-        await this.host.prep(ns, force);
-    }
-
-    resetSim(ns) {
-        this.state = HackState.UNSET;
-        this.simHost = ns.getServer(this.hostname);
-        this.simTarget = ns.getServer(this.targetname);
-        this.simPlayer = ns.getPlayer();
-        this.simTime = 0;
-        this.simIncome = 0;
-        this.simForceState = HackState.UNSET;
+        for (const host of this.hosts) {
+            await host.prep(ns, force);
+        }
     }
 
     getServerSecurityLevel(ns) {
@@ -360,8 +361,7 @@ export class SmartHackEnv {
         }
 
         // Host state
-        this.maxThreads = this.host.getMaxThreads(ns);
-        this.cores = ns.getServer(this.host.hostname).cores;
+        this.maxThreads = getMaxThreads(ns, this.hosts);
 
         // Target Info
         this.highMoney = ns.getServerMaxMoney(this.targetname);
@@ -467,23 +467,34 @@ export class SmartHackEnv {
         this.weakenGrowThreads = cycleTarget.weakenGrowThreads;
         this.cycleTotal = cycleTarget.cycleTotal;
         this.cycleBatchTime = cycleTarget.fullCycleTime;
-
-        let weakenGrowOffsetTime = this.tspacer * 2;
-        let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
-        let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
-
-        let primaryStats = {
+        this.primaryStats = {
             primaryThreadsTotal: primaryThreadsTotal,
             primaryGrowThreads: primaryGrowThreads,
             primaryWeakenThreads: primaryWeakenThreads,
         };
 
+        // dont do thread reservation and execution if this is a simulation
+        if (this.simEnabled) return true;
+
+        let weakenGrowOffsetTime = this.tspacer * 2;
+        let growOffsetTime = this.weakenTime + this.tspacer - this.growTime;
+        let hackOffsetTime = this.weakenTime - this.hackTime - this.tspacer;
+
         if (primaryThreadsTotal > 0) {
             if (primaryGrowThreads > 0)
-                this.host.tryReserveThreads(ns, GROWNS, primaryGrowThreads, growOffsetTime, this.growTime, 0);
-            if (primaryWeakenThreads > 0)
-                this.host.tryReserveThreads(
+                reserveThreadsForExecution(
                     ns,
+                    this.hosts,
+                    GROWNS,
+                    primaryGrowThreads,
+                    growOffsetTime,
+                    this.growTime,
+                    0
+                );
+            if (primaryWeakenThreads > 0)
+                reserveThreadsForExecution(
+                    ns,
+                    this.hosts,
                     WEAKENNS,
                     primaryWeakenThreads,
                     weakenGrowOffsetTime,
@@ -495,25 +506,36 @@ export class SmartHackEnv {
         for (let i = 0; i < this.cycleTotal; i++) {
             if (primaryThreadsTotal > 0 && i === 0) continue;
             let cycleOffsetTime = i * this.cycleSpacer;
-            this.host.tryReserveThreads(
+            reserveThreadsForExecution(
                 ns,
+                this.hosts,
                 HACKNS,
                 this.hackThreads,
                 cycleOffsetTime + hackOffsetTime,
                 this.hackTime,
                 i
             );
-            this.host.tryReserveThreads(
+            reserveThreadsForExecution(
                 ns,
+                this.hosts,
                 GROWNS,
                 this.growThreads,
                 cycleOffsetTime + growOffsetTime,
                 this.growTime,
                 i
             );
-            this.host.tryReserveThreads(ns, WEAKENNS, this.weakenHackThreads, cycleOffsetTime, this.weakenTime, i);
-            this.host.tryReserveThreads(
+            reserveThreadsForExecution(
                 ns,
+                this.hosts,
+                WEAKENNS,
+                this.weakenHackThreads,
+                cycleOffsetTime,
+                this.weakenTime,
+                i
+            );
+            reserveThreadsForExecution(
+                ns,
+                this.hosts,
                 WEAKENNS,
                 this.weakenGrowThreads,
                 cycleOffsetTime + weakenGrowOffsetTime,
@@ -532,7 +554,7 @@ export class SmartHackEnv {
             "SMART",
         ]);
 
-        this.logStats(ns, primaryStats);
+        this.logStats(ns);
 
         await this.execute(ns);
         this.resetThreads();
@@ -567,16 +589,16 @@ export class SmartHackEnv {
         }
     }
 
-    logStats(ns, primaryStats) {
-        if (primaryStats.primaryThreadsTotal > 0) {
+    logStats(ns) {
+        if (this.primaryStats.primaryThreadsTotal > 0) {
             ns.print(
                 ns.sprintf(
                     "%8s SMART-PRIMARY: %s => Grow %d; Weaken %d; Total Threads %d",
                     new Date().toLocaleTimeString("it-IT"),
                     this.targetname,
-                    primaryStats.primaryGrowThreads,
-                    primaryStats.primaryWeakenThreads,
-                    primaryStats.primaryThreadsTotal
+                    this.primaryStats.primaryGrowThreads,
+                    this.primaryStats.primaryWeakenThreads,
+                    this.primaryStats.primaryThreadsTotal
                 )
             );
         }
@@ -594,8 +616,8 @@ export class SmartHackEnv {
                 this.threadsPerCycle * this.cycleTotal,
                 this.cycleTotal,
                 this.cycleMax,
-                stdFormat(ns, this.cycleBatchTime),
-                stFormat(ns, this.cycleBatchTime - this.weakenTime)
+                stdFormat(ns, this.cycleBatchTime, true),
+                stFormat(ns, this.cycleBatchTime - this.weakenTime, true)
             )
         );
     }
@@ -603,23 +625,33 @@ export class SmartHackEnv {
     /** @param {import(".").NS } ns */
     async execute(ns) {
         let execs = [];
-        for (const scriptCall of this.host.reservedScriptCalls) {
-            execs.push({
-                script: scriptCall.script,
-                host: this.host.hostname,
-                threads: scriptCall.threads,
-                target: this.targetname,
-                delay: scriptCall.offset,
-                pos: execs.length,
-                finish: scriptCall.offset + scriptCall.length,
-                batchId: scriptCall.batchId,
-            });
+        for (const host of this.hosts) {
+            for (const scriptCall of host.reservedScriptCalls) {
+                execs.push({
+                    script: scriptCall.script,
+                    host: host.hostname,
+                    threads: scriptCall.threads,
+                    target: this.targetname,
+                    delay: scriptCall.offset,
+                    pos: execs.length,
+                    finish: scriptCall.offset + scriptCall.length,
+                    batchId: scriptCall.batchId,
+                });
+            }
         }
 
         execs = execs.sort((a, b) => b.delay - a.delay);
 
         // for (const exec of execs) {
-        //     ns.tprintf("%s %s %s %s", exec.script, exec.threads, exec.delay, exec.batchId);
+        //     ns.tprintf(
+        //         "%20s:%02d-%9s %4d %s %s",
+        //         exec.host,
+        //         exec.batchId,
+        //         exec.script,
+        //         exec.threads,
+        //         stFormat(ns, exec.delay),
+        //         stFormat(ns, exec.finish)
+        //     );
         // }
 
         this.waitPID = 0;
@@ -674,7 +706,7 @@ export class SmartHackEnv {
             }
 
             let pid = ns.exec(exec.script, exec.host, exec.threads, exec.target, exec.pos, startTime);
-            if (waitPIDFinishTime < exec.finish) {
+            if (waitPIDFinishTime <= exec.finish) {
                 this.waitPID = pid;
                 waitPIDFinishTime = exec.finish;
             }
@@ -682,7 +714,9 @@ export class SmartHackEnv {
     }
 
     resetThreads() {
-        this.host.reset();
+        for (const host of this.hosts) {
+            host.reset();
+        }
     }
 
     /** @param {import(".").NS } ns */
@@ -696,5 +730,49 @@ export class SmartHackEnv {
 
         this.waitPID = 0;
         return false;
+    }
+
+    resetSim(ns) {
+        this.simTarget = ns.getServer(this.targetname);
+        this.simPlayer = ns.getPlayer();
+    }
+
+    /** @param {import(".").NS } ns */
+    async fastSim(ns, time) {
+        this.resetSim(ns);
+        this.simEnabled = true;
+
+        let simIncome = 0;
+        let simTime = 0;
+        let simState = 0; // 0: primary, 1: no-primary
+
+        while (true) {
+            if (simState === 0) {
+                await this.refresh(ns);
+                if (simTime + this.cycleBatchTime > time) break;
+
+                if (this.primaryStats.primaryThreadsTotal === 0) this.simState = 1;
+
+                simIncome += this.hackTotal * (this.cycleTotal - 1);
+                simTime += this.cycleBatchTime;
+            } else {
+                let timeRemaining = time - simTime;
+                let cyclesRemaining = Math.floor(timeRemaining / this.cycleBatchTime);
+
+                simIncome += this.hackTotal * this.cycleTotal * cyclesRemaining;
+                simTime += this.cycleBatchTime * cyclesRemaining;
+
+                break;
+            }
+        }
+
+        this.simEnabled = false;
+
+        if (simTime === 0) {
+            ns.tprintf("%s - %s", this.targetname, stFormat(ns, this.cycleBatchTime));
+            return 0;
+        }
+
+        return simIncome / (simTime / 1000);
     }
 }

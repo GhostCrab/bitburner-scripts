@@ -1,4 +1,4 @@
-import { allHosts, setns, softenServer } from "./util.js";
+import { allHosts, softenServer } from "./util.js";
 
 /** @param {import(".").NS } ns */
 function listServers(ns, hostnames) {
@@ -22,12 +22,10 @@ function listServers(ns, hostnames) {
 
 /** @param {import(".").NS } ns */
 export async function main(ns) {
-    setns(ns)
-
-    let hostnames = allHosts()
+    let hostnames = allHosts(ns)
 
     for (const hostname of hostnames) {
-        softenServer(hostname);
+        softenServer(ns, hostname);
     }
 
     listServers(ns, hostnames);
