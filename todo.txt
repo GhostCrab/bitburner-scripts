@@ -32,6 +32,25 @@
 [ ] mcp.js: automatically join factions that dont exclude other factions
 [ ] sleeve.js: buy augmentations before reboot
 [ ] hacknet.js: generate coding contracts while profitable
+[ ] stat.js: write status script
+[ ] mcp.js: when top rep faction is my gang, dont buy neuroflux from them and dont factor their rep
+    - Time played/since aug/since node
+    - Status of scripts
+        - cct
+        - corp
+        - clock
+        - gang
+        - smart_hack
+        - hacknet/leech
+    - sleeve status
+    - hacknet income/target
+    - corp income
+    - gang stats (members, income)
+    - karma
+    - bought servers/sizes
+    - home server size
+
+
 
 === Bitnodes ===
 

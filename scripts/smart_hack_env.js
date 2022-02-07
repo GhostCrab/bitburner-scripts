@@ -460,6 +460,30 @@ export class SmartHackEnv {
 
         let cycleTarget = allCycles[0];
 
+        if (!cycleTarget) {
+            ns.tprintf(
+                "ERROR: Encountered a bad cycle target, targeting %s, [0]%s [1]%s",
+                this.targetname,
+                allCycles[0],
+                allCycles[1]
+            );
+
+            this.hackTotal = 0;
+            this.hackThreads = 0;
+            this.growThreads = 0;
+            this.weakenHackThreads = 0;
+            this.weakenGrowThreads = 0;
+            this.cycleTotal = 1;
+            this.cycleBatchTime = this.weakenTime;
+            this.primaryStats = {
+                primaryThreadsTotal: primaryThreadsTotal,
+                primaryGrowThreads: primaryGrowThreads,
+                primaryWeakenThreads: primaryWeakenThreads,
+            };
+
+            return false;
+        }
+
         this.hackTotal = cycleTarget.hackTotal;
         this.hackThreads = cycleTarget.hackThreads;
         this.growThreads = cycleTarget.growThreads;
@@ -573,8 +597,9 @@ export class SmartHackEnv {
             }
             let cycleMem = cycleThreads * this.threadSize;
             ns.tprintf(
-                "%3d  %9s/s %5.2f %d/%4d/%5d %6dGB, %s|%s|%s|%s",
+                "%3d;%s  %9s/s %5.2f %d/%4d/%5d %6dGB, %s|%s|%s|%s",
                 cycle.cycleTotal,
+                this.targetname,
                 ns.nFormat(cycle.production, "($0.000a)"),
                 cycle.percentPerCycle ? cycle.percentPerCycle : 0,
                 primaryThreadsTotal,
